@@ -414,7 +414,7 @@ function App() {
               { id: 'daily', icon: Sun, label: 'حكمة اليوم' },
               { id: 'all', icon: Library, label: 'مختارات' },
               { id: 'favorites', icon: Heart, label: 'المفضلة' },
-              { id: 'favorites', icon: Heart, label: '2المفضلة' }
+              { id: 'favorites', icon: Heart, label: 'الورد اليومي' }
             ].map(({ id, icon: Icon, label }) => (
               <button
                 key={id}
