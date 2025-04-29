@@ -79,50 +79,49 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({
     };
   }, [quote.text, isFullscreen]);
   
-  useEffect(() => {
-    let animationFrameId: number;
-    let lastTimestamp: number | null = null;
-    let pixelRemainder = 0; // 🆕 mémoriser les sous-pixels accumulés
-  
-    const scroll = (currentTime: number) => {
-      if (!isScrolling || !contentScrollRef.current) return;
-  
-      if (lastTimestamp !== null) {
-        const elapsed = currentTime - lastTimestamp; // ms depuis la dernière frame
-        const pixelsPerMs = scrollSpeedRef.current / 1000; // px/ms
-        let pixelsToScroll = elapsed * pixelsPerMs + pixelRemainder; // ajouter la dette accumulée
-  
-        const integerPixels = Math.floor(pixelsToScroll); // partie entière à scroller
-        pixelRemainder = pixelsToScroll - integerPixels; // 🆕 garder le reste
-  
-        if (integerPixels > 0) {
-          contentScrollRef.current.scrollBy({
-            top: integerPixels,
-            behavior: 'auto' // 🚀 toujours auto
-          });
-        }
-  
+    useEffect(() => {
+      let animationFrameId: number;
+      let lastTimestamp: number | null = null;
+      let pixelRemainder = 0;
+    
+      const scroll = (currentTime: number) => {
+        if (!isScrolling || !contentScrollRef.current) return;
+    
         const el = contentScrollRef.current;
-        if (el.scrollTop + el.clientHeight >= el.scrollHeight) {
-          setIsScrolling(false);
-          return;
+    
+        if (lastTimestamp !== null) {
+          const elapsed = currentTime - lastTimestamp;
+          const pixelsPerMs = scrollSpeedRef.current / 1000;
+          let pixelsToScroll = elapsed * pixelsPerMs + pixelRemainder;
+    
+          const intPixels = Math.floor(pixelsToScroll);
+          pixelRemainder = pixelsToScroll - intPixels;
+    
+          if (intPixels > 0) {
+            el.scrollTop += intPixels; // 👈 plus fiable que scrollBy sur iPhone
+          }
+    
+          if (el.scrollTop + el.clientHeight >= el.scrollHeight) {
+            setIsScrolling(false);
+            return;
+          }
         }
+    
+        lastTimestamp = currentTime;
+        animationFrameId = requestAnimationFrame(scroll);
+      };
+    
+      if (isScrolling) {
+        lastTimestamp = null;
+        pixelRemainder = 0;
+        animationFrameId = requestAnimationFrame(scroll);
       }
+    
+      return () => {
+        cancelAnimationFrame(animationFrameId);
+      };
+    }, [isScrolling]);
   
-      lastTimestamp = currentTime;
-      animationFrameId = requestAnimationFrame(scroll);
-    };
-  
-    if (isScrolling) {
-      lastTimestamp = null;
-      pixelRemainder = 0;
-      animationFrameId = requestAnimationFrame(scroll);
-    }
-  
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [isScrolling]);
   
 
   useEffect(() => {
