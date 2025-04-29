@@ -398,13 +398,13 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({
                     {/* Boutons - et + */}
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setScrollSpeed(Math.max(scrollSpeedRef.current - 10, 10))}
+                        onClick={() => setScrollSpeed(Math.max(scrollSpeedRef.current - 5, 5))}
                         className="px-3 py-1 bg-gray-200 rounded-full hover:bg-gray-300 text-sm"
                       >
                         -
                       </button>
                       <button
-                        onClick={() => setScrollSpeed(scrollSpeedRef.current + 10)}
+                        onClick={() => setScrollSpeed(scrollSpeedRef.current + 5)}
                         className="px-3 py-1 bg-gray-200 rounded-full hover:bg-gray-300 text-sm"
                       >
                         +
