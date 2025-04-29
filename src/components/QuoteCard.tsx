@@ -43,8 +43,25 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const [isScrolling, setIsScrolling] = useState(false);
   const [scrollSpeed, setScrollSpeed] = useState(30); // Pixels par seconde
-  
+
   const [isScrollable, setIsScrollable] = useState(false);
+  const scrollSpeedRef = useRef(scrollSpeed);
+  useEffect(() => {
+    scrollSpeedRef.current = scrollSpeed;
+  }, [scrollSpeed]);
+  useEffect(() => {
+    const handleTouchStart = () => {
+      if (isScrolling) {
+        setIsScrolling(false);
+      }
+    };
+  
+    window.addEventListener('touchstart', handleTouchStart);
+  
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+    };
+  }, [isScrolling]);
   
   useEffect(() => {
     const checkScroll = () => {
@@ -63,24 +80,50 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({
   }, [quote.text, isFullscreen]);
   
   useEffect(() => {
-    let scrollInterval: NodeJS.Timeout | null = null;
+    let animationFrameId: number;
+    let lastTimestamp: number | null = null;
+    let pixelRemainder = 0; // 🆕 mémoriser les sous-pixels accumulés
   
-    if (isScrolling && contentScrollRef.current) {
-      scrollInterval = setInterval(() => {
-        const el = contentScrollRef.current!;
-        el.scrollBy({ top: 1, behavior: 'smooth' });
+    const scroll = (currentTime: number) => {
+      if (!isScrolling || !contentScrollRef.current) return;
   
-        // Arrêter automatiquement à la fin
+      if (lastTimestamp !== null) {
+        const elapsed = currentTime - lastTimestamp; // ms depuis la dernière frame
+        const pixelsPerMs = scrollSpeedRef.current / 1000; // px/ms
+        let pixelsToScroll = elapsed * pixelsPerMs + pixelRemainder; // ajouter la dette accumulée
+  
+        const integerPixels = Math.floor(pixelsToScroll); // partie entière à scroller
+        pixelRemainder = pixelsToScroll - integerPixels; // 🆕 garder le reste
+  
+        if (integerPixels > 0) {
+          contentScrollRef.current.scrollBy({
+            top: integerPixels,
+            behavior: 'auto' // 🚀 toujours auto
+          });
+        }
+  
+        const el = contentScrollRef.current;
         if (el.scrollTop + el.clientHeight >= el.scrollHeight) {
           setIsScrolling(false);
+          return;
         }
-      }, 1000 / scrollSpeed);
+      }
+  
+      lastTimestamp = currentTime;
+      animationFrameId = requestAnimationFrame(scroll);
+    };
+  
+    if (isScrolling) {
+      lastTimestamp = null;
+      pixelRemainder = 0;
+      animationFrameId = requestAnimationFrame(scroll);
     }
   
     return () => {
-      if (scrollInterval) clearInterval(scrollInterval);
+      cancelAnimationFrame(animationFrameId);
     };
-  }, [isScrolling, scrollSpeed]);
+  }, [isScrolling]);
+  
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -339,29 +382,41 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({
                 </span>
 
                 {isScrollable && (
-                  <div className="flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1 text-sm shadow-sm">
+                  <div className="flex items-center gap-4 bg-gray-100 rounded-full px-4 py-2 shadow-sm">
+                    {/* Bouton Play/Pause */}
                     <button
                       onClick={() => setIsScrolling(!isScrolling)}
-                      className="px-3 py-1 bg-blue-600 text-white rounded-full hover:bg-blue-700"
+                      className="w-12 h-12 flex items-center justify-center bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all"
                     >
-                      {isScrolling ? 'Pause' : 'Lecture'}
+                      {isScrolling ? (
+                        <span className="text-2xl font-bold">II</span> // Pause
+                      ) : (
+                        <span className="text-2xl font-bold">▹</span> // Lecture
+                      )}
                     </button>
-                    <label className="flex items-center gap-1">
-                      Vitesse :
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        value={scrollSpeed}
-                        onChange={(e) => setScrollSpeed(Number(e.target.value))}
-                        className="accent-blue-600"
-                      />
-                      <span className="ml-1 w-[40px] text-right">{scrollSpeed} px/s</span>
-                    </label>
+
+                    {/* Boutons - et + */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setScrollSpeed(Math.max(scrollSpeedRef.current - 10, 10))}
+                        className="px-3 py-1 bg-gray-200 rounded-full hover:bg-gray-300 text-sm"
+                      >
+                        -
+                      </button>
+                      <button
+                        onClick={() => setScrollSpeed(scrollSpeedRef.current + 10)}
+                        className="px-3 py-1 bg-gray-200 rounded-full hover:bg-gray-300 text-sm"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 )}
-              </div>
 
+
+
+              </div>
+              
               {/* 🔧 Boutons d'action */}
               <div className="flex items-center gap-2">
                 {showCopiedMessage && (
