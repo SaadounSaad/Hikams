@@ -91,7 +91,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({
     
         if (lastTimestamp !== null) {
           const elapsed = currentTime - lastTimestamp;
-          const pixelsPerMs = scrollSpeedRef.current / 1000;
+          const pixelsPerMs = scrollSpeedRef.current / 500;
           let pixelsToScroll = elapsed * pixelsPerMs + pixelRemainder;
     
           const intPixels = Math.floor(pixelsToScroll);
