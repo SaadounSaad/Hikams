@@ -21,7 +21,8 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onToggleFavorite, o
   const [scrollSpeed, setScrollSpeed] = useState(30);
   const [showCopiedMessage, setShowCopiedMessage] = useState(false);
   const scrollSpeedRef = useRef(scrollSpeed);
-
+  const isArabicText = /[\u0600-\u06FF]/.test(quote.text); // simple détection
+  
   useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;
   }, [scrollSpeed]);
@@ -128,7 +129,10 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onToggleFavorite, o
       )}
 
       <div ref={contentScrollRef} className="max-h-[calc(100vh-6rem)] overflow-y-auto">
-        <p className="text-xl leading-relaxed whitespace-pre-wrap">{quote.text}</p>
+        <p 
+          className="text-xl leading-relaxed whitespace-pre-wrap">
+            {quote.text}
+        </p>
         {quote.source && <p className="text-gray-500 mt-4">- {quote.source}</p>}
       </div>
 
