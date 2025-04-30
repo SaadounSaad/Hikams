@@ -1,8 +1,7 @@
-// ✨ QuoteCard.tsx — version enrichie avec lecture immersive + favoris, partage, etc.
+// QuoteCard.tsx avec gestion de la taille de texte via styles inline
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Heart, Share2, Trash2, Edit } from 'lucide-react';
-
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { Heart, Share2, Trash2, Edit, PlayCircle, PauseCircle, Plus, Minus, X, Copy } from 'lucide-react';
 import { Quote } from '../types';
 
 interface QuoteCardProps {
@@ -13,20 +12,75 @@ interface QuoteCardProps {
   onSwipe?: (direction: 'left' | 'right') => void;
 }
 
-export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onToggleFavorite, onDelete, onEdit }) => {
+// Définition des tailles de police
+const FONT_SIZES = [
+  { name: 'text-xl', size: '1.25rem', lineHeight: '2rem' },
+  { name: 'text-2xl', size: '1.5rem', lineHeight: '3rem' },
+  { name: 'text-3xl', size: '1.875rem', lineHeight: '3.5rem' },
+  { name: 'text-4xl', size: '2.25rem', lineHeight: '4rem' }
+];
+
+export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavorite, onDelete, onEdit, onSwipe }) => {
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const [isReading, setIsReading] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [showControls, setShowControls] = useState(false);
-  const [scrollSpeed, setScrollSpeed] = useState(30);
+  const [scrollSpeed, setScrollSpeed] = useState(20);
   const [showCopiedMessage, setShowCopiedMessage] = useState(false);
+  const [autoScrollProgress, setAutoScrollProgress] = useState(0);
+  const [hasScrollbar, setHasScrollbar] = useState(false);
+  
+  // Utiliser un état pour l'index de taille de texte
+  const [textSizeIndex, setTextSizeIndex] = useState(1); // Commence à 1 = text-2xl
+  
   const scrollSpeedRef = useRef(scrollSpeed);
-  const isArabicText = /[\u0600-\u06FF]/.test(quote.text); // simple détection
+  const controlsTimeoutRef = useRef<number | null>(null);
+  
+  // Détection de langue
+  const isArabicText = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(quote.text);
   
   useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;
   }, [scrollSpeed]);
 
+  // Fonctions simplifiées pour modifier la taille du texte
+  const increaseTextSize = useCallback(() => {
+    setTextSizeIndex(prevIndex => 
+      prevIndex < FONT_SIZES.length - 1 ? prevIndex + 1 : prevIndex
+    );
+  }, []);
+
+  const decreaseTextSize = useCallback(() => {
+    setTextSizeIndex(prevIndex => 
+      prevIndex > 0 ? prevIndex - 1 : prevIndex
+    );
+  }, []);
+
+  // Vérifier si une barre de défilement est nécessaire
+  useEffect(() => {
+    const checkForScrollbar = () => {
+      if (contentScrollRef.current) {
+        const hasScroll = contentScrollRef.current.scrollHeight > contentScrollRef.current.clientHeight;
+        setHasScrollbar(hasScroll);
+      }
+    };
+
+    // Vérifier après le rendu
+    checkForScrollbar();
+    
+    // Vérifier également après le chargement complet de la page
+    window.addEventListener('load', checkForScrollbar);
+    
+    // Et lors du redimensionnement de la fenêtre
+    window.addEventListener('resize', checkForScrollbar);
+
+    return () => {
+      window.removeEventListener('load', checkForScrollbar);
+      window.removeEventListener('resize', checkForScrollbar);
+    };
+  }, [quote.text, textSizeIndex]);
+
+  // Gestionnaire de défilement avec tracking de progression
   useEffect(() => {
     let animationFrameId: number;
     let lastTimestamp: number | null = null;
@@ -36,6 +90,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onToggleFavorite, o
       if (!isScrolling || !contentScrollRef.current) return;
 
       const el = contentScrollRef.current;
+      const maxScroll = el.scrollHeight - el.clientHeight;
 
       if (lastTimestamp !== null) {
         const elapsed = currentTime - lastTimestamp;
@@ -46,6 +101,11 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onToggleFavorite, o
 
         if (intPixels > 0) {
           el.scrollTop += intPixels;
+        }
+
+        // Mettre à jour la progression
+        if (maxScroll > 0) {
+          setAutoScrollProgress((el.scrollTop / maxScroll) * 100);
         }
 
         if (el.scrollTop + el.clientHeight >= el.scrollHeight) {
@@ -62,33 +122,88 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onToggleFavorite, o
       lastTimestamp = null;
       pixelRemainder = 0;
       animationFrameId = requestAnimationFrame(scroll);
+      showControlsTemporarily();
     }
 
     return () => cancelAnimationFrame(animationFrameId);
   }, [isScrolling]);
 
+  // Gestion des contrôles
+  const showControlsTemporarily = useCallback(() => {
+    setShowControls(true);
+    
+    if (controlsTimeoutRef.current) {
+      window.clearTimeout(controlsTimeoutRef.current);
+    }
+    
+    controlsTimeoutRef.current = window.setTimeout(() => {
+      setShowControls(false);
+      controlsTimeoutRef.current = null;
+    }, 5000);
+  }, []);
+
   useEffect(() => {
-    const handleTouch = () => {
+    const handleInteraction = () => {
       if (isReading) {
-        setIsScrolling(false);
-        setShowControls(true);
-        setTimeout(() => setShowControls(false), 5000);
+        showControlsTemporarily();
       }
     };
 
-    window.addEventListener('touchstart', handleTouch);
-    return () => window.removeEventListener('touchstart', handleTouch);
-  }, [isReading]);
+    window.addEventListener('touchstart', handleInteraction);
+    window.addEventListener('mousemove', handleInteraction);
+    
+    return () => {
+      window.removeEventListener('touchstart', handleInteraction);
+      window.removeEventListener('mousemove', handleInteraction);
+      if (controlsTimeoutRef.current) {
+        window.clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, [isReading, showControlsTemporarily]);
 
-  const toggleScroll = () => setIsScrolling((prev) => !prev);
-  const increaseSpeed = () => setScrollSpeed((s) => s + 10);
-  const decreaseSpeed = () => setScrollSpeed((s) => Math.max(10, s - 10));
+  // Gestures de swipe
+  useEffect(() => {
+    if (!onSwipe || isReading) return;
+    
+    let touchStartX = 0;
+    const touchThreshold = 70; // distance minimale pour un swipe
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+    };
+    
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const diff = touchEndX - touchStartX;
+      
+      if (Math.abs(diff) > touchThreshold) {
+        onSwipe(diff > 0 ? 'right' : 'left');
+      }
+    };
+    
+    const element = contentScrollRef.current;
+    if (element) {
+      element.addEventListener('touchstart', handleTouchStart);
+      element.addEventListener('touchend', handleTouchEnd);
+      
+      return () => {
+        element.removeEventListener('touchstart', handleTouchStart);
+        element.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [onSwipe, isReading]);
+
+  // Actions de contrôle
+  const toggleScroll = () => setIsScrolling(prev => !prev);
+  const increaseSpeed = () => setScrollSpeed(s => Math.min(100, s + 10));
+  const decreaseSpeed = () => setScrollSpeed(s => Math.max(10, s - 10));
   const exitReading = () => {
     setIsReading(false);
     setIsScrolling(false);
     setShowControls(false);
   };
 
+  // Partage et copie
   const handleShare = async () => {
     const shareText = `${quote.text}${quote.source ? `\n- ${quote.source}` : ''}`;
 
@@ -114,56 +229,210 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onToggleFavorite, o
     }
   };
 
+  // Style de texte avec taille dynamique
+  const textStyle = {
+    fontSize: FONT_SIZES[textSizeIndex].size,
+    lineHeight: FONT_SIZES[textSizeIndex].lineHeight
+  };
+
   return (
-    <div className="relative bg-white rounded-xl shadow p-6">
-      {!isReading && (
-        <button
-          onClick={() => {
-            setIsReading(true);
-            setIsScrolling(true);
-          }}
-          className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-full shadow"
-        >
-          ▹ Lire
-        </button>
-      )}
+    <div className="relative bg-white rounded-xl shadow transition-all duration-200">
+      {/* Mode de lecture normal */}
+      {!isReading ? (
+        <div className="p-6">
+          {/* Bouton de lecture en haut à droite, visible uniquement s'il y a une barre de défilement */}
+          {hasScrollbar && (
+            <button
+              onClick={() => {
+                setIsReading(true);
+                setIsScrolling(true);
+              }}
+              className="absolute top-2 right-40 flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full 
+              bg-gray-400/30 hover:bg-gray-400 text-white backdrop-blur-sm shadow-sm transition-all duration-200"
+              aria-label="Mode lecture"
+            >
+              <PlayCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">Mode lecture</span>
+            </button>
+          )}
 
-      <div ref={contentScrollRef} className="max-h-[calc(100vh-6rem)] overflow-y-auto">
-        <p 
-          className="text-xl leading-relaxed whitespace-pre-wrap">
-            {quote.text}
-        </p>
-        {quote.source && <p className="text-gray-500 mt-4">- {quote.source}</p>}
-      </div>
+          <div ref={contentScrollRef} className="max-h-[calc(100vh-12rem)] overflow-y-auto">
+            <p
+              className={`leading-relaxed whitespace-pre-wrap ${isArabicText ? 'font-arabic' : 'font-sans'}`}
+              style={textStyle}
+              dir={isArabicText ? 'rtl' : 'ltr'}
+            >
+              {quote.text}
+            </p>
+            {quote.source && (
+              <p className="text-gray-500 mt-4 italic">
+                — {quote.source}
+              </p>
+            )}
+          </div>
 
-      <div className="mt-4 flex flex-wrap justify-between items-center gap-4">
-        <div className="flex gap-2">
-          <button onClick={() => onToggleFavorite(quote.id)} title="Favori" className="text-gray-500 hover:text-red-500">
-            <Heart fill={quote.isFavorite ? 'currentColor' : 'none'} className="w-5 h-5" />
-          </button>
-          <button onClick={handleShare} title="Partager" className="text-gray-500 hover:text-blue-500">
-            <Share2 className="w-5 h-5" />
-          </button>
-          <button onClick={() => onEdit(quote)} title="Modifier" className="text-gray-500 hover:text-green-500">
-            <Edit className="w-5 h-5" />
-          </button>
-          <button onClick={() => onDelete(quote.id)} title="Supprimer" className="text-gray-500 hover:text-black">
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <div className="mt-6 flex flex-wrap justify-between items-center gap-4">
+            <div className="flex gap-3">
+              <button 
+                onClick={() => onToggleFavorite(quote.id)} 
+                title="Favori" 
+                className={`p-2 rounded-full transition-colors ${
+                  quote.isFavorite ? 'text-red-500 bg-red-50' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <Heart fill={quote.isFavorite ? 'currentColor' : 'none'} className="w-5 h-5" />
+              </button>
+              
+              <button 
+                onClick={handleShare} 
+                title="Partager" 
+                className="p-2 rounded-full text-gray-500 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+              >
+                <Share2 className="w-5 h-5" />
+              </button>
+              
+              <button 
+                onClick={() => onEdit(quote)} 
+                title="Modifier" 
+                className="p-2 rounded-full text-gray-500 hover:text-green-500 hover:bg-green-50 transition-colors"
+              >
+                <Edit className="w-5 h-5" />
+              </button>
+              
+              <button 
+                onClick={() => onDelete(quote.id)} 
+                title="Supprimer" 
+                className="p-2 rounded-full text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {showCopiedMessage && (
+              <span className="absolute bottom-2 right-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                Copié !
+              </span>
+            )}
+          </div>
         </div>
-        {showCopiedMessage && <span className="text-sm text-green-600">Copié !</span>}
-      </div>
+      ) : (
+        // Mode lecture immersive
+        <div className="fixed inset-0 bg-white z-40 flex flex-col">
+          <div 
+            ref={contentScrollRef} 
+            className="flex-1 overflow-y-auto px-6 py-8"
+            onClick={() => showControlsTemporarily()}
+          >
+            <p
+              className={`leading-relaxed whitespace-pre-wrap mx-auto max-w-3xl ${isArabicText ? 'font-arabic' : 'font-sans'}`}
+              style={textStyle}
+              dir={isArabicText ? 'rtl' : 'ltr'}
+            >
+              {quote.text}
+            </p>
+            {quote.source && (
+              <p className="text-gray-500 mt-8 max-w-3xl mx-auto italic">
+                — {quote.source}
+              </p>
+            )}
+          </div>
+          
+          {/* Barre de progression */}
+          <div className="fixed bottom-0 left-0 right-0 h-1 bg-gray-200">
+            <div 
+              className="h-full bg-blue-600 transition-all duration-100"
+              style={{ width: `${autoScrollProgress}%` }}
+            />
+          </div>
 
-      {isReading && showControls && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg px-4 py-2 flex items-center gap-4 z-30">
-          <button onClick={toggleScroll} className="text-xl font-bold">
-            {isScrolling ? 'II' : '▹'}
-          </button>
-          <button onClick={decreaseSpeed}>-</button>
-          <button onClick={increaseSpeed}>+</button>
-          <button onClick={exitReading}>✖</button>
+          {/* Contrôles */}
+          {showControls && (
+            <>
+              <button 
+                onClick={exitReading} 
+                className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100 transition-colors z-50"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
+                <div className="flex gap-1 px-2 border-r border-gray-200">
+                  <button 
+                    onClick={decreaseTextSize} 
+                    className="p-3 text-gray-600 hover:text-blue-600"
+                    title="Diminuer la taille du texte"
+                  >
+                    <Minus className="w-5 h-5" />
+                  </button>
+                  <div className="flex items-center px-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={increaseTextSize} 
+                    className="p-3 text-gray-600 hover:text-blue-600"
+                    title="Augmenter la taille du texte"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div className="flex gap-1 px-2 border-r border-gray-200">
+                  <button 
+                    onClick={decreaseSpeed} 
+                    className="p-3 text-gray-600 hover:text-blue-600"
+                    title="Ralentir"
+                  >
+                    <Minus className="w-5 h-5" />
+                  </button>
+                  <div className="flex items-center px-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {scrollSpeed}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={increaseSpeed} 
+                    className="p-3 text-gray-600 hover:text-blue-600"
+                    title="Accélérer"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div className="flex gap-1 px-2">
+                  <button 
+                    onClick={toggleScroll} 
+                    className="p-3 text-gray-600 hover:text-blue-600"
+                    title={isScrolling ? "Pause" : "Lecture"}
+                  >
+                    {isScrolling ? <PauseCircle className="w-6 h-6" /> : <PlayCircle className="w-6 h-6" />}
+                  </button>
+                  <button 
+                    onClick={() => onToggleFavorite(quote.id)} 
+                    className={`p-3 ${quote.isFavorite ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}
+                    title="Favori"
+                  >
+                    <Heart fill={quote.isFavorite ? 'currentColor' : 'none'} className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={handleShare} 
+                    className="p-3 text-gray-600 hover:text-blue-600"
+                    title="Partager"
+                  >
+                    <Copy className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
   );
-};
+});
+
+// Pour TypeScript - nom du composant dans les outils de développement
+QuoteCard.displayName = 'QuoteCard';
+
+export default QuoteCard;

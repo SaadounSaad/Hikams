@@ -56,11 +56,11 @@ class Storage {
         case 'oldest':
           query = query.order('created_at', { ascending: true });
           break;
-        case 'scheduled':
-          query = query
-            .order('scheduled_date', { ascending: true, nullsLast: true })
-            .order('created_at', { ascending: true });
-          break;
+          case 'scheduled':
+            query = query
+              .order('scheduled_date', { ascending: true, nullsLast: true } as any)
+              .order('created_at', { ascending: true });
+            break;
       }
 
       const { data, error } = await query;

@@ -76,3 +76,115 @@
 .slide-exit-reverse {
   animation: slideOutRight 0.3s ease-out forwards;
 }
+
+/* Variables CSS pour les tailles de texte et les couleurs sépia */
+:root {
+  --app-font-size-factor: 100%;
+  --app-background-color: #ffffff;
+  --app-text-color: #000000;
+  --app-border-color: #e5e7eb;
+}
+
+/* Application des variables de taille de texte */
+body {
+  font-size: calc(1rem * var(--app-font-size-factor) / 100);
+  background-color: var(--app-background-color);
+  color: var(--app-text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Classe pour le mode sépia */
+.sepia-mode {
+  --app-background-color: #f5f2e8;
+  --app-text-color: #5c4b37;
+  --app-border-color: #e8e0cf;
+}
+
+/* Styles spécifiques pour le mode sépia */
+.sepia-mode .bg-white {
+  background-color: #f8f5ee;
+}
+
+.sepia-mode .text-gray-700 {
+  color: #5c4b37;
+}
+
+.sepia-mode .text-gray-600 {
+  color: #6e5c45;
+}
+
+.sepia-mode .text-gray-500 {
+  color: #7d6b52;
+}
+
+.sepia-mode .bg-gray-50 {
+  background-color: #f0ece1;
+}
+
+.sepia-mode .border-gray-200 {
+  border-color: var(--app-border-color);
+}
+
+/* Ajustez également les boutons et autres éléments si nécessaire */
+.sepia-mode .bg-sky-600 {
+  background-color: #8c7355;
+}
+
+.sepia-mode .hover\:bg-sky-700:hover {
+  background-color: #7a6348;
+}
+
+.sepia-mode .peer-checked\:bg-sky-600:checked {
+  background-color: #8c7355;
+}
+/* Ajoutez ces classes à votre index.css existant */
+
+/* Solution alternative pour la taille de texte */
+html {
+  font-size: 16px; /* Taille de base */
+}
+
+/* Classe pour adapter la taille de texte en fonction du facteur */
+.font-size-adaptive {
+  font-size: calc(1rem * var(--app-font-size-factor, 100%) / 100);
+}
+
+/* Texte arabe avec taille adaptive */
+.font-arabic {
+  font-family: 'Amiri', system-ui, -apple-system, sans-serif;
+  line-height: 2; /* Meilleur espacement pour le texte arabe */
+  font-size: calc(1.2rem * var(--app-font-size-factor, 100%) / 100);
+}
+
+/* Classes spécifiques pour les textes dans les citations */
+.quote-text {
+  font-family: 'Amiri', system-ui, -apple-system, sans-serif;
+  line-height: 2;
+  font-size: calc(1.3rem * var(--app-font-size-factor, 100%) / 100);
+}
+
+.quote-source {
+  font-size: calc(0.875rem * var(--app-font-size-factor, 100%) / 100);
+}
+
+/* Forcer l'application de la variable CSS aux élements de l'UI */
+.text-sm {
+  font-size: calc(0.875rem * var(--app-font-size-factor, 100%) / 100) !important;
+}
+
+.text-base {
+  font-size: calc(1rem * var(--app-font-size-factor, 100%) / 100) !important;
+}
+
+.text-lg {
+  font-size: calc(1.125rem * var(--app-font-size-factor, 100%) / 100) !important;
+}
+
+.text-xl {
+  font-size: calc(1.25rem * var(--app-font-size-factor, 100%) / 100) !important;
+}
+
+/* Assurer que les boutons et éléments interactifs respectent aussi la taille */
+button, input, select, textarea {
+  font-size: calc(1rem * var(--app-font-size-factor, 100%) / 100);
+}
