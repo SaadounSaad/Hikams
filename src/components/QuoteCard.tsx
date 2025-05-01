@@ -1,5 +1,4 @@
-// QuoteCard.tsx avec gestion de la taille de texte via styles inline
-
+// QuoteCard.tsx avec gestion tactile améliorée
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Heart, Share2, Trash2, Edit, PlayCircle, PauseCircle, Plus, Minus, X, Copy } from 'lucide-react';
 import { Quote } from '../types';
@@ -17,7 +16,8 @@ const FONT_SIZES = [
   { name: 'text-xl', size: '1.25rem', lineHeight: '2rem' },
   { name: 'text-2xl', size: '1.5rem', lineHeight: '3rem' },
   { name: 'text-3xl', size: '1.875rem', lineHeight: '3.5rem' },
-  { name: 'text-4xl', size: '2.25rem', lineHeight: '4rem' }
+  { name: 'text-4xl', size: '2.25rem', lineHeight: '4rem' },
+  { name: 'text-5xl', size: '3.25rem', lineHeight: '5rem' },
 ];
 
 export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavorite, onDelete, onEdit, onSwipe }) => {
@@ -25,16 +25,20 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
   const [isReading, setIsReading] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [showControls, setShowControls] = useState(false);
-  const [scrollSpeed, setScrollSpeed] = useState(20);
+  const [scrollSpeed, setScrollSpeed] = useState(10);
   const [showCopiedMessage, setShowCopiedMessage] = useState(false);
   const [autoScrollProgress, setAutoScrollProgress] = useState(0);
   const [hasScrollbar, setHasScrollbar] = useState(false);
   
   // Utiliser un état pour l'index de taille de texte
-  const [textSizeIndex, setTextSizeIndex] = useState(1); // Commence à 1 = text-2xl
+  const [textSizeIndex, setTextSizeIndex] = useState(2); // Commence à 1 = text-2xl
   
   const scrollSpeedRef = useRef(scrollSpeed);
   const controlsTimeoutRef = useRef<number | null>(null);
+  
+  // Ajouter des refs pour le contrôle tactile amélioré
+  const lastTapTimeRef = useRef<number>(0);
+  const isTouchActionRef = useRef<boolean>(false);
   
   // Détection de langue
   const isArabicText = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(quote.text);
@@ -122,13 +126,15 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
       lastTimestamp = null;
       pixelRemainder = 0;
       animationFrameId = requestAnimationFrame(scroll);
-      showControlsTemporarily();
+      
+      // Ne pas montrer les contrôles automatiquement quand on démarre le défilement
+      // showControlsTemporarily();
     }
 
     return () => cancelAnimationFrame(animationFrameId);
   }, [isScrolling]);
 
-  // Gestion des contrôles
+  // Gestion des contrôles améliorée avec contrôle tactile
   const showControlsTemporarily = useCallback(() => {
     setShowControls(true);
     
@@ -137,64 +143,87 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     }
     
     controlsTimeoutRef.current = window.setTimeout(() => {
-      setShowControls(false);
+      // Ne pas cacher automatiquement les contrôles si on est en pause
+      if (isScrolling) {
+        setShowControls(false);
+      }
       controlsTimeoutRef.current = null;
     }, 5000);
-  }, []);
+  }, [isScrolling]);
 
-  useEffect(() => {
-    const handleInteraction = () => {
-      if (isReading) {
-        showControlsTemporarily();
-      }
-    };
-
-    window.addEventListener('touchstart', handleInteraction);
-    window.addEventListener('mousemove', handleInteraction);
+  // Nouvelle fonction pour gérer le comportement tactile amélioré
+  const handleContentTap = useCallback(() => {
+    if (!isReading) return;
     
-    return () => {
-      window.removeEventListener('touchstart', handleInteraction);
-      window.removeEventListener('mousemove', handleInteraction);
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapTimeRef.current;
+    
+    // Empêcher les actions secondaires dues à la propagation d'événements
+    if (isTouchActionRef.current) {
+      isTouchActionRef.current = false;
+      return;
+    }
+    
+    // Double tap (moins de 300ms entre deux taps)
+    if (timeSinceLastTap < 300) {
+      // Second tap - basculer l'état de lecture et cacher les contrôles
+      if (showControls) {
+        setIsScrolling(true);
+        setShowControls(false);
+      }
+    } else {
+      // Premier tap - mettre en pause et montrer les contrôles
+      setIsScrolling(false);
+      setShowControls(true);
+      
+      // Ne pas configurer de timeout pour masquer les contrôles - ils resteront
+      // visibles jusqu'au second tap
       if (controlsTimeoutRef.current) {
         window.clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
       }
-    };
-  }, [isReading, showControlsTemporarily]);
-
-  // Gestures de swipe
-  useEffect(() => {
-    if (!onSwipe || isReading) return;
-    
-    let touchStartX = 0;
-    const touchThreshold = 70; // distance minimale pour un swipe
-    
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartX = e.touches[0].clientX;
-    };
-    
-    const handleTouchEnd = (e: TouchEvent) => {
-      const touchEndX = e.changedTouches[0].clientX;
-      const diff = touchEndX - touchStartX;
-      
-      if (Math.abs(diff) > touchThreshold) {
-        onSwipe(diff > 0 ? 'right' : 'left');
-      }
-    };
-    
-    const element = contentScrollRef.current;
-    if (element) {
-      element.addEventListener('touchstart', handleTouchStart);
-      element.addEventListener('touchend', handleTouchEnd);
-      
-      return () => {
-        element.removeEventListener('touchstart', handleTouchStart);
-        element.removeEventListener('touchend', handleTouchEnd);
-      };
     }
-  }, [onSwipe, isReading]);
+    
+    lastTapTimeRef.current = now;
+  }, [isReading, showControls]);
+
+  // Gestionnaire d'événements pour les boutons de contrôle
+  const handleControlButtonClick = useCallback(() => {
+    // Marquer qu'un bouton de contrôle a été cliqué pour éviter le basculement du mode lecture
+    isTouchActionRef.current = true;
+  }, []);
 
   // Actions de contrôle
-  const toggleScroll = () => setIsScrolling(prev => !prev);
+  const toggleScroll = useCallback(() => {
+    handleControlButtonClick();
+    setIsScrolling(prev => !prev);
+  }, [handleControlButtonClick]);
+
+  const increaseSpeedWithTracking = useCallback(() => {
+    handleControlButtonClick();
+    increaseSpeed();
+  }, [handleControlButtonClick]);
+
+  const decreaseSpeedWithTracking = useCallback(() => {
+    handleControlButtonClick();
+    decreaseSpeed();
+  }, [handleControlButtonClick]);
+
+  const increaseTextSizeWithTracking = useCallback(() => {
+    handleControlButtonClick();
+    increaseTextSize();
+  }, [handleControlButtonClick, increaseTextSize]);
+
+  const decreaseTextSizeWithTracking = useCallback(() => {
+    handleControlButtonClick();
+    decreaseTextSize();
+  }, [handleControlButtonClick, decreaseTextSize]);
+
+  const exitReadingWithTracking = useCallback(() => {
+    handleControlButtonClick();
+    exitReading();
+  }, [handleControlButtonClick]);
+
   const increaseSpeed = () => setScrollSpeed(s => Math.min(100, s + 10));
   const decreaseSpeed = () => setScrollSpeed(s => Math.max(10, s - 10));
   const exitReading = () => {
@@ -205,6 +234,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
 
   // Partage et copie
   const handleShare = async () => {
+    handleControlButtonClick();
     const shareText = `${quote.text}${quote.source ? `\n- ${quote.source}` : ''}`;
 
     if (navigator.share) {
@@ -227,6 +257,11 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     } catch (err) {
       console.error('Erreur copier dans le presse-papier :', err);
     }
+  };
+
+  const handleFavoriteToggle = () => {
+    handleControlButtonClick();
+    onToggleFavorite(quote.id);
   };
 
   // Style de texte avec taille dynamique
@@ -321,7 +356,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
           <div 
             ref={contentScrollRef} 
             className="flex-1 overflow-y-auto px-6 py-8"
-            onClick={() => showControlsTemporarily()}
+            onClick={handleContentTap}
           >
             <p
               className={`leading-relaxed whitespace-pre-wrap mx-auto max-w-3xl ${isArabicText ? 'font-arabic' : 'font-sans'}`}
@@ -349,7 +384,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
           {showControls && (
             <>
               <button 
-                onClick={exitReading} 
+                onClick={exitReadingWithTracking} 
                 className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100 transition-colors z-50"
               >
                 <X className="w-6 h-6" />
@@ -358,7 +393,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
               <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
                 <div className="flex gap-1 px-2 border-r border-gray-200">
                   <button 
-                    onClick={decreaseTextSize} 
+                    onClick={decreaseTextSizeWithTracking} 
                     className="p-3 text-gray-600 hover:text-blue-600"
                     title="Diminuer la taille du texte"
                   >
@@ -370,7 +405,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                     </span>
                   </div>
                   <button 
-                    onClick={increaseTextSize} 
+                    onClick={increaseTextSizeWithTracking} 
                     className="p-3 text-gray-600 hover:text-blue-600"
                     title="Augmenter la taille du texte"
                   >
@@ -380,7 +415,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                 
                 <div className="flex gap-1 px-2 border-r border-gray-200">
                   <button 
-                    onClick={decreaseSpeed} 
+                    onClick={decreaseSpeedWithTracking} 
                     className="p-3 text-gray-600 hover:text-blue-600"
                     title="Ralentir"
                   >
@@ -392,7 +427,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                     </span>
                   </div>
                   <button 
-                    onClick={increaseSpeed} 
+                    onClick={increaseSpeedWithTracking} 
                     className="p-3 text-gray-600 hover:text-blue-600"
                     title="Accélérer"
                   >
@@ -409,7 +444,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                     {isScrolling ? <PauseCircle className="w-6 h-6" /> : <PlayCircle className="w-6 h-6" />}
                   </button>
                   <button 
-                    onClick={() => onToggleFavorite(quote.id)} 
+                    onClick={handleFavoriteToggle} 
                     className={`p-3 ${quote.isFavorite ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}
                     title="Favori"
                   >

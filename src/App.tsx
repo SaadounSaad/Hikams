@@ -175,6 +175,8 @@ function AppContent() {
       setCurrentCategoryFilter('');
     }
     setSearchResults([]);
+    // Fermer le menu sur mobile lorsqu'un élément est sélectionné
+    setIsMenuOpen(false);
   }, [selectedCategory]);
 
   // Vérifie si on doit afficher la sous-navigation pour مختارات
@@ -247,7 +249,9 @@ function AppContent() {
             {shouldShowMukhtaratSubNav && (
               <div className="flex items-center">
                 <span className="text-xs font-medium px-2 py-1 rounded-md bg-sky-100 text-sky-600">
-                  {selectedCategory === 'mukhtarat'}
+                  {selectedCategory === 'mukhtarat' 
+                    ? `${totalCount}/829` 
+                    : `${mukhtaratSubCategories.find(cat => cat.id === selectedCategory)?.count || 0}/829`}
                 </span>
               </div>
             )}
@@ -261,7 +265,10 @@ function AppContent() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-center md:justify-start gap-2">
             {/* Bouton pour toutes les entrées مختارات */}
             <button
-              onClick={() => handleCategoryChange('mukhtarat')}
+              onClick={() => {
+                handleCategoryChange('mukhtarat');
+                setIsMenuOpen(false); // Assurer que le menu se ferme
+              }}
               className={`px-3 py-1 rounded-lg text-sm font-arabic transition-colors ${
                 selectedCategory === 'mukhtarat'
                   ? 'bg-sky-100 text-sky-600'
@@ -277,7 +284,10 @@ function AppContent() {
               return (
                 <button
                   key={subCategory.id}
-                  onClick={() => handleCategoryChange(subCategory.id)}
+                  onClick={() => {
+                    handleCategoryChange(subCategory.id);
+                    setIsMenuOpen(false); // Assurer que le menu se ferme
+                  }}
                   className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-arabic transition-colors ${
                     selectedCategory === subCategory.id
                       ? 'bg-sky-100 text-sky-600'
