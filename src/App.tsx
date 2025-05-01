@@ -100,37 +100,73 @@ function AppContent() {
 
   // Effet pour filtrer les citations en fonction de la catégorie sélectionnée
   useEffect(() => {
-    const newFilteredQuotes = selectedCategory === 'daily' 
-      ? dailyQuotes 
-      : selectedCategory === 'all'
-      ? currentCategoryFilter
+    // Remplacez le contenu de cet useEffect par :
+    let newFilteredQuotes: Quote[] = [];
+    
+    if (selectedCategory === 'daily') {
+      newFilteredQuotes = dailyQuotes;
+    } 
+    else if (selectedCategory === 'all') {
+      newFilteredQuotes = currentCategoryFilter 
         ? quotes.filter(quote => quote.category === currentCategoryFilter)
-        : quotes
-      : selectedCategory === 'favorites'
-      ? quotes.filter(quote => quote.isFavorite)
-      : quotes.filter(quote => quote.category === selectedCategory);
+        : quotes;
+    } 
+    else if (selectedCategory === 'favorites') {
+      newFilteredQuotes = quotes.filter(quote => quote.isFavorite);
+    }
+    // Ajouter cette partie pour gérer "مختارات"
+    else if (selectedCategory === 'mukhtarat') {
+      // Pour مختارات, inclure toutes les citations de ses sous-catégories
+      const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
+      newFilteredQuotes = quotes.filter(quote => subCategories.includes(quote.category));
+    }
+    else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
+      // Pour une sous-catégorie spécifique de مختارات
+      newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
+    }
+    else {
+      // Pour toutes les autres catégories
+      newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
+    }
     
     setFilteredQuotes(newFilteredQuotes);
   }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]);
 
-  // Gestionnaire pour la recherche
-  const handleSearch = useCallback((results: Quote[]) => {
-    setSearchResults(results);
-    if (results.length > 0) {
-      setFilteredQuotes(results);
-    } else {
-      const categoryQuotes = selectedCategory === 'daily' 
-        ? dailyQuotes 
-        : selectedCategory === 'all'
-        ? currentCategoryFilter
-          ? quotes.filter(quote => quote.category === currentCategoryFilter)
-          : quotes
-        : selectedCategory === 'favorites'
-        ? quotes.filter(quote => quote.isFavorite)
-        : quotes.filter(quote => quote.category === selectedCategory);
-      setFilteredQuotes(categoryQuotes);
-    }
-  }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]);
+    // Gestionnaire pour la recherche
+    const handleSearch = useCallback((results: Quote[]) => {
+      setSearchResults(results);
+      if (results.length > 0) {
+        setFilteredQuotes(results);
+      } else {
+        // Voici la partie à modifier - Remplacez le contenu ci-dessous par :
+        let categoryQuotes: Quote[] = [];
+        
+        if (selectedCategory === 'daily') {
+          categoryQuotes = dailyQuotes;
+        } 
+        else if (selectedCategory === 'all') {
+          categoryQuotes = currentCategoryFilter 
+            ? quotes.filter(quote => quote.category === currentCategoryFilter)
+            : quotes;
+        } 
+        else if (selectedCategory === 'favorites') {
+          categoryQuotes = quotes.filter(quote => quote.isFavorite);
+        }
+        // Ajouter cette partie pour gérer "مختارات"
+        else if (selectedCategory === 'mukhtarat') {
+          const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
+          categoryQuotes = quotes.filter(quote => subCategories.includes(quote.category));
+        }
+        else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
+          categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+        }
+        else {
+          categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+        }
+        
+        setFilteredQuotes(categoryQuotes);
+      }
+    }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]); 
 
   // Gestionnaire pour le changement de catégorie
   const handleCategoryChange = useCallback((category: string) => {
