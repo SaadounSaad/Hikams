@@ -12,7 +12,7 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { AuthForm } from './components/AuthForm';
 import { Quote } from './types';
-import { categoryManager } from './utils/categories';
+import { categoryManager, getIconComponent } from './utils/categories';
 
 // Composant App principal qui utilise tous nos nouveaux composants
 function AppContent() {
@@ -100,7 +100,6 @@ function AppContent() {
 
   // Effet pour filtrer les citations en fonction de la catégorie sélectionnée
   useEffect(() => {
-    // Remplacez le contenu de cet useEffect par :
     let newFilteredQuotes: Quote[] = [];
     
     if (selectedCategory === 'daily') {
@@ -114,7 +113,6 @@ function AppContent() {
     else if (selectedCategory === 'favorites') {
       newFilteredQuotes = quotes.filter(quote => quote.isFavorite);
     }
-    // Ajouter cette partie pour gérer "مختارات"
     else if (selectedCategory === 'mukhtarat') {
       // Pour مختارات, inclure toutes les citations de ses sous-catégories
       const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
@@ -132,41 +130,41 @@ function AppContent() {
     setFilteredQuotes(newFilteredQuotes);
   }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]);
 
-    // Gestionnaire pour la recherche
-    const handleSearch = useCallback((results: Quote[]) => {
-      setSearchResults(results);
-      if (results.length > 0) {
-        setFilteredQuotes(results);
-      } else {
-        // Voici la partie à modifier - Remplacez le contenu ci-dessous par :
-        let categoryQuotes: Quote[] = [];
-        
-        if (selectedCategory === 'daily') {
-          categoryQuotes = dailyQuotes;
-        } 
-        else if (selectedCategory === 'all') {
-          categoryQuotes = currentCategoryFilter 
-            ? quotes.filter(quote => quote.category === currentCategoryFilter)
-            : quotes;
-        } 
-        else if (selectedCategory === 'favorites') {
-          categoryQuotes = quotes.filter(quote => quote.isFavorite);
-        }
-        // Ajouter cette partie pour gérer "مختارات"
-        else if (selectedCategory === 'mukhtarat') {
-          const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
-          categoryQuotes = quotes.filter(quote => subCategories.includes(quote.category));
-        }
-        else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
-          categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
-        }
-        else {
-          categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
-        }
-        
-        setFilteredQuotes(categoryQuotes);
+  // Gestionnaire pour la recherche
+  const handleSearch = useCallback((results: Quote[]) => {
+    setSearchResults(results);
+    if (results.length > 0) {
+      setFilteredQuotes(results);
+    } else {
+      // Voici la partie à modifier - Remplacez le contenu ci-dessous par :
+      let categoryQuotes: Quote[] = [];
+      
+      if (selectedCategory === 'daily') {
+        categoryQuotes = dailyQuotes;
+      } 
+      else if (selectedCategory === 'all') {
+        categoryQuotes = currentCategoryFilter 
+          ? quotes.filter(quote => quote.category === currentCategoryFilter)
+          : quotes;
+      } 
+      else if (selectedCategory === 'favorites') {
+        categoryQuotes = quotes.filter(quote => quote.isFavorite);
       }
-    }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]); 
+      // Ajouter cette partie pour gérer "مختارات"
+      else if (selectedCategory === 'mukhtarat') {
+        const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
+        categoryQuotes = quotes.filter(quote => subCategories.includes(quote.category));
+      }
+      else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
+        categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+      }
+      else {
+        categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+      }
+      
+      setFilteredQuotes(categoryQuotes);
+    }
+  }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]); 
 
   // Gestionnaire pour le changement de catégorie
   const handleCategoryChange = useCallback((category: string) => {
@@ -179,6 +177,10 @@ function AppContent() {
     setSearchResults([]);
   }, [selectedCategory]);
 
+  // Vérifie si on doit afficher la sous-navigation pour مختارات
+  const shouldShowMukhtaratSubNav = selectedCategory === 'mukhtarat' || 
+                                   categoryManager.isMukhtaratSubCategory(selectedCategory);
+
   // Titre de la catégorie
   const getCategoryTitle = (categoryId: string): string => {
     switch (categoryId) {
@@ -189,11 +191,11 @@ function AppContent() {
       case 'favorites':
         return 'المفضلة';
       case 'verses':
-        return 'آيات';
+        return 'آيات مِفتاحية';
       case 'hadiths':
-        return 'هدي نبوي';
+        return 'هَدْي نَبَوي';
       case 'thoughts':
-        return 'دُرَر';
+        return 'دُرَرْ';
       default:
         const category = categoryManager.getCategories().find((c: {id: string, name: string}) => c.id === categoryId);
         return category ? category.name : 'حكم الموردين';
@@ -221,6 +223,10 @@ function AppContent() {
     );
   }
 
+  // Obtenir les sous-catégories مختارات
+  const mukhtaratSubCategories = categoryManager.getMukhtaratSubCategories();
+  const totalCount = mukhtaratSubCategories.reduce((acc, cat) => acc + (cat.count || 0), 0);
+
   return (
     <div className={`min-h-screen ${isSepiaMode ? 'bg-gradient-to-br from-amber-50/50 to-amber-50' : 'bg-gradient-to-br from-slate-50 to-white'}`}>
       <header className={`${isSepiaMode ? 'bg-amber-50/80' : 'bg-white/80'} backdrop-blur-sm shadow-sm fixed top-0 left-0 right-0 h-16 z-30`}>
@@ -236,11 +242,58 @@ function AppContent() {
             <h1 className="text-14xl font-bold font-arabic text-sky-600 whitespace-nowrap">
               {searchResults.length > 0 ? 'نتيجة البحث' : getCategoryTitle(selectedCategory)}
             </h1>
+            
+            {/* Affichage du compteur de citations uniquement pour مختارات et ses sous-catégories */}
+            {shouldShowMukhtaratSubNav && (
+              <div className="flex items-center">
+                <span className="text-xs font-medium px-2 py-1 rounded-md bg-sky-100 text-sky-600">
+                  {selectedCategory === 'mukhtarat'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      <div className="flex min-h-screen pt-16">
+      {/* Nouvelle sous-navigation pour مختارات */}
+      {shouldShowMukhtaratSubNav && (
+        <div className={`fixed top-16 left-0 right-0 h-12 ${isSepiaMode ? 'bg-amber-50/80' : 'bg-white/80'} backdrop-blur-sm border-b border-gray-200 z-20`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-center md:justify-start gap-2">
+            {/* Bouton pour toutes les entrées مختارات */}
+            <button
+              onClick={() => handleCategoryChange('mukhtarat')}
+              className={`px-3 py-1 rounded-lg text-sm font-arabic transition-colors ${
+                selectedCategory === 'mukhtarat'
+                  ? 'bg-sky-100 text-sky-600'
+                  : 'hover:bg-gray-100 text-gray-700'
+              }`}
+            >
+              مختارات
+            </button>
+            
+            {/* Boutons pour chaque sous-catégorie */}
+            {mukhtaratSubCategories.map(subCategory => {
+              const IconComponent = getIconComponent(subCategory.icon);
+              return (
+                <button
+                  key={subCategory.id}
+                  onClick={() => handleCategoryChange(subCategory.id)}
+                  className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-arabic transition-colors ${
+                    selectedCategory === subCategory.id
+                      ? 'bg-sky-100 text-sky-600'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <IconComponent className="w-4 h-4" />
+                  <span>{subCategory.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className={`flex min-h-screen ${shouldShowMukhtaratSubNav ? 'pt-28' : 'pt-16'}`}>
         <Sidebar 
           selectedCategory={selectedCategory}
           currentCategoryFilter={currentCategoryFilter}

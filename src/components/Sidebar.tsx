@@ -1,4 +1,4 @@
-// Sidebar.tsx - Corrigé pour votre AuthContext
+// Sidebar.tsx - Modifié pour gérer la nouvelle sous-navigation
 import React, { useState, useEffect } from 'react';
 import { Search, Calendar, Heart, SortDesc, Settings, LogOut, BookMarked } from 'lucide-react';
 import { categoryManager, getIconComponent } from '../utils/categories';
@@ -6,9 +6,9 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
   selectedCategory: string;
-  currentCategoryFilter: string; // Sera utilisé dans les fonctionnalités futures
+  currentCategoryFilter: string;
   onCategoryChange: (category: string) => void;
-  onSearch: (results: any[]) => void; // Sera utilisé quand la recherche sera implémentée
+  onSearch: (results: any[]) => void;
   isOpen: boolean;
   onClose: () => void;
   onShowSettings: () => void;
@@ -23,38 +23,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   onShowSettings
 }) => {
-  const { logout } = useAuth(); // Utilisation de la fonction logout de votre AuthContext
+  const { logout } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [showMukhtarat, setShowMukhtarat] = useState(false);
   
-  // Maintenir le menu مختارات ouvert si une sous-catégorie est sélectionnée
-  useEffect(() => {
-    if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
-      setShowMukhtarat(true);
-    }
-  }, [selectedCategory]);
-
-  // Catégories principales
-  const mainCategories = [
-    { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'مختارات', icon: <BookMarked className="w-5 h-5" />, count: 829 },
-    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
-  ];
-
-  // Sous-catégories pour مختارات
-  const mukhtaratSubCategories = categoryManager.getMukhtaratSubCategories();
-
-  // Gérer le clic sur مختارات
-  const handleMukhtaratClick = () => {
-    setShowMukhtarat(!showMukhtarat);
-    
-    // Si on ouvre les sous-catégories et qu'aucune n'est sélectionnée,
-    // sélectionner la première par défaut
-    if (!showMukhtarat && !categoryManager.isMukhtaratSubCategory(selectedCategory)) {
-      onCategoryChange('verses');
-    }
-  };
-
   // Recherche
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +33,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     console.log("Recherche pour:", searchTerm);
     setSearchTerm('');
   };
+
+  // Catégories principales
+  const mainCategories = [
+    { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'mukhtarat', name: 'مختارات', icon: <BookMarked className="w-5 h-5" />, count: 829 },
+    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
+  ];
 
   return (
     <>
@@ -100,11 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {mainCategories.map((category) => (
               <div key={category.id}>
                 <button
-                  onClick={
-                    category.id === 'mukhtarat' 
-                      ? handleMukhtaratClick 
-                      : () => onCategoryChange(category.id)
-                  }
+                  onClick={() => onCategoryChange(category.id)}
                   className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
                     (selectedCategory === category.id || 
                     (category.id === 'mukhtarat' && categoryManager.isMukhtaratSubCategory(selectedCategory)))
@@ -129,44 +103,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </span>
                   )}
                 </button>
-
-                {/* Sous-catégories pour مختارات */}
-                {category.id === 'mukhtarat' && showMukhtarat && (
-                  <div className="pl-8 mt-1 space-y-1">
-                    {mukhtaratSubCategories.map((subCategory) => {
-                      const IconComponent = getIconComponent(subCategory.icon);
-                      return (
-                        <button
-                          key={subCategory.id}
-                          onClick={() => onCategoryChange(subCategory.id)}
-                          className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
-                            selectedCategory === subCategory.id
-                              ? 'bg-sky-50 text-sky-600'
-                              : 'hover:bg-gray-50 text-gray-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 font-arabic">
-                            <div className="text-gray-500">
-                              <IconComponent className="w-5 h-5" />
-                            </div>
-                            <span>{subCategory.name}</span>
-                          </div>
-                          {subCategory.count && (
-                            <span 
-                              className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
-                                selectedCategory === subCategory.id
-                                  ? 'bg-sky-100 text-sky-600'
-                                  : 'bg-gray-100 text-gray-500'
-                              }`}
-                            >
-                              {subCategory.count}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             ))}
           </div>
