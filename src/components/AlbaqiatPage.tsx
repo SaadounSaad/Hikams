@@ -36,7 +36,7 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
   const [autoScrollProgress, setAutoScrollProgress] = useState(0);
   
   // Utiliser un état pour l'index de taille de texte
-  const [textSizeIndex, setTextSizeIndex] = useState(3); // Commence à 2 = text-3xl
+  const [textSizeIndex, setTextSizeIndex] = useState(2); // Commence à 2 = text-3xl
   
   const scrollSpeedRef = useRef(scrollSpeed);
   const controlsTimeoutRef = useRef<number | null>(null);
@@ -319,9 +319,12 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
                 {albaqiyatList.map((item) => (
                   <div key={item.id} className="border-b pb-6 last:border-0 last:pb-0">
                     <div
-                      className="text-xl leading-relaxed whitespace-pre-wrap font-arabic"
+                      className="whitespace-pre-wrap font-arabic"
                       dir="rtl"
-                      style={textStyle}
+                      style={{
+                        fontSize: FONT_SIZES[textSizeIndex].size,
+                        lineHeight: FONT_SIZES[textSizeIndex].lineHeight
+                      }}
                     >
                       {item.texte}
                     </div>

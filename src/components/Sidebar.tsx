@@ -49,8 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
   
   const mirajSubCategories: SubCategory[] = [
-    { id: 'wird', name: 'الورد اليومي', parentId: 'miraj-arwah' },
-    { id: 'azkar', name: 'أذكار الصباح و المساء', parentId: 'miraj-arwah' },
+
     // Ajoutez les autres boutons comme sous-catégories
   ];
   return (
