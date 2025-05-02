@@ -1,31 +1,45 @@
-// AlbaqiatPage.tsx
+// GenericThikrPage.tsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowLeft, PlayCircle, PauseCircle, Plus, Minus, X } from 'lucide-react';
+import { ArrowLeft, PlayCircle, PauseCircle, Plus, Minus, X } from 'lucide-react';
 
-interface AlbaqiatPageProps {
+interface GenericThikrPageProps {
+  contentId: string;
   onBack: () => void;
 }
 
-interface Albaqiyat {
-  id: string;
+interface ThikrItem {
+  id: number;
   texte: string;
-  qualif: 'tasbih' | 'hamd' | 'tahlil' | 'takbir';
+  qualif: string;
 }
+
+// Table de correspondance entre IDs et titres
+const CONTENT_IDS: Record<string, number> = {
+  'azkar': 1,
+  'wird-nawawi': 2,
+  'dua-ahmad': 3,
+  'dua-ibrahim': 4,
+  'kashf-ahzan': 5,
+  'adiya-mukhtara': 6,
+  'ayat-mafatiha': 7,
+  'dua-atharat': 8,
+  'azkar-nabi': 9,
+  'muntakhab-dua': 10
+};
 
 // Définition des tailles de police
 const FONT_SIZES = [
-  { name: 'text-xl', size: '1.25rem', lineHeight: '2rem' },
-  { name: 'text-2xl', size: '1.5rem', lineHeight: '3rem' },
-  { name: 'text-3xl', size: '1.875rem', lineHeight: '3.5rem' },
-  { name: 'text-4xl', size: '2.25rem', lineHeight: '4rem' },
-  { name: 'text-5xl', size: '3.25rem', lineHeight: '5rem' },
+    { name: 'text-xl', size: '1.25rem', lineHeight: '2rem' },
+    { name: 'text-2xl', size: '1.5rem', lineHeight: '3rem' },
+    { name: 'text-3xl', size: '1.875rem', lineHeight: '3.5rem' },
+    { name: 'text-4xl', size: '2.25rem', lineHeight: '4rem' },
+    { name: 'text-5xl', size: '3.25rem', lineHeight: '5rem' },
 ];
 
-const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
+const GenericThikrPage: React.FC<GenericThikrPageProps> = ({ contentId, onBack }) => {
   const contentScrollRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<'takbir' | 'tahlil' | 'hamd' | 'tasbih'>('tasbih');
-  const [albaqiyatList, setAlbaqiyatList] = useState<Albaqiyat[]>([]);
+  const [thikrItem, setThikrItem] = useState<ThikrItem | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   
   // États pour la lecture automatique
@@ -35,8 +49,8 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
   const [scrollSpeed, setScrollSpeed] = useState(10);
   const [autoScrollProgress, setAutoScrollProgress] = useState(0);
   
-  // Utiliser un état pour l'index de taille de texte
-  const [textSizeIndex, setTextSizeIndex] = useState(3); // Commence à 2 = text-3xl
+  // Utiliser un état pour l'index de taille de texte - utiliser text-4xl par défaut
+  const [textSizeIndex, setTextSizeIndex] = useState(2);
   
   const scrollSpeedRef = useRef(scrollSpeed);
   const controlsTimeoutRef = useRef<number | null>(null);
@@ -65,38 +79,42 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
 
   // Chargement des données
   useEffect(() => {
-    async function loadAlbaqiyat() {
+    async function loadThikr() {
       setLoading(true);
       
       try {
+        // Récupérer l'ID correspondant à contentId
+        const thikrId = CONTENT_IDS[contentId];
+        
+        if (!thikrId) {
+          console.error('ID de contenu non trouvé:', contentId);
+          setThikrItem(null);
+          setLoading(false);
+          return;
+        }
+        
         const { data, error } = await supabase
-          .from('albaqiyat_table')
+          .from('thikr_table')
           .select('*')
-          .eq('qualif', activeTab)
-          .order('id', { ascending: true });
+          .eq('id', thikrId)
+          .single();
         
         if (error) {
           console.error('Erreur Supabase:', error);
-          setAlbaqiyatList([]);
+          setThikrItem(null);
         } else {
-          setAlbaqiyatList(data || []);
+          setThikrItem(data);
         }
       } catch (error) {
         console.error('Erreur:', error);
-        setAlbaqiyatList([]);
+        setThikrItem(null);
       } finally {
         setLoading(false);
       }
     }
     
-    loadAlbaqiyat();
-    
-    // Réinitialiser la position de défilement quand on change d'onglet
-    if (contentScrollRef.current) {
-      contentScrollRef.current.scrollTop = 0;
-    }
-    setAutoScrollProgress(0);
-  }, [activeTab]);
+    loadThikr();
+  }, [contentId]);
 
   // Gestionnaire de défilement avec tracking de progression
   useEffect(() => {
@@ -256,87 +274,57 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
             </button>
             
             <h1 className="text-2xl font-bold font-arabic flex-1 text-center" dir="rtl">
-              الباقيات الصالحات
+              {thikrItem ? thikrItem.qualif : 'جاري التحميل...'}
             </h1>
             
             <div className="w-5"></div> {/* Spacer pour centrer le titre */}
           </header>
-          
-          {/* Onglets pour basculer entre baqiat */}
-          <div className="flex border-b">
-            <button
-              onClick={() => setActiveTab('takbir')}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'takbir'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              تكبير
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('tahlil')}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'tahlil'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              تهليل
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('hamd')}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'hamd'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              الحمد
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('tasbih')}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'tasbih'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              تسبيحات
-            </button>
-          </div>
 
           <div ref={contentScrollRef} className="flex-1 overflow-auto p-6">
             {loading ? (
               <div className="flex justify-center items-center h-full">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
               </div>
-            ) : albaqiyatList.length > 0 ? (
-              <div className="space-y-8">
-                {albaqiyatList.map((item) => (
-                  <div key={item.id} className="border-b pb-6 last:border-0 last:pb-0">
-                    <div
-                      className="text-xl leading-relaxed whitespace-pre-wrap font-arabic"
-                      dir="rtl"
-                      style={textStyle}
-                    >
-                      {item.texte}
-                    </div>
-                  </div>
-                ))}
+            ) : thikrItem ? (
+              <div className="max-w-3xl mx-auto">
+                <div
+                  className="whitespace-pre-wrap font-arabic"
+                  dir="rtl"
+                  style={textStyle}
+                >
+                  {thikrItem.texte}
+                </div>
               </div>
             ) : (
               <div className="text-center text-gray-500 font-arabic">
-                لا توجد باقيات متاحة
+                لا يوجد محتوى متاح
               </div>
             )}
           </div>
 
+          {/* Contrôle de taille de texte */}
+          <div className="fixed bottom-20 right-4 bg-white/90 rounded-full shadow-lg flex items-center z-10 border border-gray-200">
+            <button 
+              onClick={decreaseTextSize} 
+              className="p-2 text-gray-600 hover:text-blue-600"
+              title="Diminuer la taille du texte"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+            <div className="px-2 text-sm font-medium">
+              {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
+            </div>
+            <button 
+              onClick={increaseTextSize} 
+              className="p-2 text-gray-600 hover:text-blue-600"
+              title="Augmenter la taille du texte"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+
           {/* Bouton de lecture */}
-          {!loading && albaqiyatList.length > 0 && (
+          {!loading && thikrItem && (
             <button
               onClick={() => {
                 setIsReading(true);
@@ -349,10 +337,9 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
               <PlayCircle className="w-6 h-6" />
             </button>
           )}
-
         </>
       ) : (
-        // Mode lecture immersive avec barres fixes
+        // Mode lecture immersive avec barre fixe
         <div className="fixed inset-0 bg-white z-40 flex flex-col">
           {/* Barre de navigation fixe */}
           <header className="py-4 px-6 flex items-center justify-between border-b bg-white sticky top-0 z-10">
@@ -364,109 +351,34 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
             </button>
             
             <h1 className="text-2xl font-bold font-arabic flex-1 text-center" dir="rtl">
-              الباقيات الصالحات
+              {thikrItem ? thikrItem.qualif : 'جاري التحميل...'}
             </h1>
             
             <div className="w-5"></div> {/* Spacer pour centrer le titre */}
           </header>
-          
-          {/* Onglets fixes */}
-          <div className="flex border-b bg-white sticky top-16 z-10">
-            <button
-              onClick={() => {
-                setActiveTab('takbir');
-                setIsScrolling(false);
-                setAutoScrollProgress(0);
-              }}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'takbir'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              تكبير
-            </button>
-            
-            <button
-              onClick={() => {
-                setActiveTab('tahlil');
-                setIsScrolling(false);
-                setAutoScrollProgress(0);
-              }}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'tahlil'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              تهليل
-            </button>
-            
-            <button
-              onClick={() => {
-                setActiveTab('hamd');
-                setIsScrolling(false);
-                setAutoScrollProgress(0);
-              }}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'hamd'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              الحمد
-            </button>
-            
-            <button
-              onClick={() => {
-                setActiveTab('tasbih');
-                setIsScrolling(false);
-                setAutoScrollProgress(0);
-              }}
-              className={`flex-1 py-3 font-arabic text-lg ${
-                activeTab === 'tasbih'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500'
-              }`}
-            >
-              تسبيحات
-            </button>
-          </div>
 
           {/* Zone de contenu défilante */}
           <div 
             ref={contentScrollRef} 
             className="flex-1 overflow-y-auto px-6 py-8"
             onClick={handleContentTap}
-            style={{ marginTop: '8px', height: 'calc(100% - 120px)' }} // Ajuster selon la hauteur de vos barres
           >
-            {loading ? (
-              <div className="flex justify-center items-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-              </div>
-            ) : albaqiyatList.length > 0 ? (
-              <div className="space-y-8">
-                {albaqiyatList.map((item) => (
-                  <div key={item.id} className="border-b pb-6 last:border-0 last:pb-0">
-                    <div
-                      className="whitespace-pre-wrap font-arabic"
-                      dir="rtl"
-                      style={{
-                        fontSize: FONT_SIZES[textSizeIndex].size,
-                        lineHeight: FONT_SIZES[textSizeIndex].lineHeight
-                      }}
-                    >
-                      {item.texte}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-gray-500 font-arabic">
-                لا توجد باقيات متاحة
-              </div>
-            )}
+            <div
+              className="whitespace-pre-wrap mx-auto max-w-3xl font-arabic" 
+              dir="rtl"
+              style={textStyle}
+            >
+              {thikrItem?.texte}
+            </div>
           </div>
+          
+          {/* Bouton X pour quitter le mode lecture (en haut à droite) */}
+          <button 
+            onClick={exitReadingWithTracking} 
+            className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100 transition-colors z-50"
+          >
+            <X className="w-6 h-6" />
+          </button>
           
           {/* Barre de progression */}
           <div className="fixed bottom-0 left-0 right-0 h-1 bg-gray-200">
@@ -475,13 +387,7 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
               style={{ width: `${autoScrollProgress}%` }}
             />
           </div>
-          {/* Bouton X pour quitter le mode lecture (en haut à droite) */}
-            <button 
-              onClick={exitReadingWithTracking} 
-              className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100 transition-colors z-50"
-            >
-              <X className="w-6 h-6" />
-            </button>
+
           {/* Contrôles */}
           {showControls && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
@@ -546,4 +452,4 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
   );
 };
 
-export default AlbaqiatPage;
+export default GenericThikrPage;

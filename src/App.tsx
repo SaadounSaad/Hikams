@@ -15,7 +15,7 @@ import { Quote } from './types';
 import { categoryManager, getIconComponent } from './utils/categories';
 import WirdPage from './components/WirdPage';
 import AlbaqiatPage from './components/AlbaqiatPage';  // Si ce composant existe
-import GenericContentPage from './components/GenericContentPage';
+import GenericThikrPage from './components/GenericThikrPage';
 import MirajArwahPage from './components/MirajArwahPage';
 
 
@@ -335,7 +335,7 @@ function AppContent() {
                   ) : mirajSubcategory === 'baqiyat' ? (
                     <AlbaqiatPage onBack={() => setMirajSubcategory(null)} />
                   ) : (
-                    <GenericContentPage 
+                    <GenericThikrPage 
                       contentId={mirajSubcategory} 
                       onBack={() => setMirajSubcategory(null)} 
                     />
