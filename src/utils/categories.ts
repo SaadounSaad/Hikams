@@ -17,9 +17,15 @@ const defaultCategories: ExtendedCategory[] = [
 
 // Catégories principales du système
 const mainCategories: ExtendedCategory[] = [
+    { id: 'miraj-arwah', name: 'معراج الأرواح', icon: 'Star', isDefault: true, hasSubCategories: true },
   { id: 'daily', name: 'حكمة اليوم', icon: 'calendar', isDefault: true },
   { id: 'mukhtarat', name: 'مختارات', icon: 'bookmarks', isDefault: true, hasSubCategories: true, count: 829 },
   { id: 'favorites', name: 'المفضلة', icon: 'heart', isDefault: true },
+];
+const mirajSubCategories: SubCategory[] = [
+  { id: 'wird', name: 'الورد اليومي', parentId: 'miraj-arwah' },
+  { id: 'azkar', name: 'أذكار الصباح و المساء', parentId: 'miraj-arwah' },
+  // Ajoutez les autres boutons comme sous-catégories
 ];
 
 export const getIconComponent = (iconName: string) => {

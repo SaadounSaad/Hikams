@@ -13,6 +13,11 @@ import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { AuthForm } from './components/AuthForm';
 import { Quote } from './types';
 import { categoryManager, getIconComponent } from './utils/categories';
+import WirdPage from './components/WirdPage';
+import AlbaqiatPage from './components/AlbaqiatPage';  // Si ce composant existe
+import GenericContentPage from './components/GenericContentPage';
+import MirajArwahPage from './components/MirajArwahPage';
+
 
 // Composant App principal qui utilise tous nos nouveaux composants
 function AppContent() {
@@ -31,6 +36,7 @@ function AppContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [filteredQuotes, setFilteredQuotes] = useState<Quote[]>([]);
   const [searchResults, setSearchResults] = useState<Quote[]>([]);
+  const [mirajSubcategory, setMirajSubcategory] = useState<string | null>(null);
 
   // Effet pour fermer le menu lors d'un clic à l'extérieur
   useEffect(() => {
@@ -198,11 +204,14 @@ function AppContent() {
         return 'هَدْي نَبَوي';
       case 'thoughts':
         return 'دُرَرْ';
+      case 'miraj-arwah':
+        return 'معراج الأرواح';
       default:
         const category = categoryManager.getCategories().find((c: {id: string, name: string}) => c.id === categoryId);
         return category ? category.name : 'حكم الموردين';
     }
   };
+  
 
   if (isLoading) {
     return (
@@ -314,8 +323,31 @@ function AppContent() {
           onShowSettings={() => setShowSettings(true)}
         />
 
-        <main className="flex-1 p-6">
-          <div className="max-w-3xl mx-auto relative">
+      <main className="flex-1 p-6">
+        <div className="max-w-3xl mx-auto relative">
+          {selectedCategory === 'miraj-arwah' ? (
+            <>
+              {mirajSubcategory ? (
+                // Rendu des sous-catégories
+                <>
+                  {mirajSubcategory === 'wird' ? (
+                    <WirdPage onBack={() => setMirajSubcategory(null)} />
+                  ) : mirajSubcategory === 'baqiyat' ? (
+                    <AlbaqiatPage onBack={() => setMirajSubcategory(null)} />
+                  ) : (
+                    <GenericContentPage 
+                      contentId={mirajSubcategory} 
+                      onBack={() => setMirajSubcategory(null)} 
+                    />
+                  )}
+                </>
+              ) : (
+                // Page principale de معراج الأرواح avec la grille de boutons
+                <MirajArwahPage onSelectSubcategory={setMirajSubcategory} />
+              )}
+            </>
+          ) : (
+            // Rendu normal pour les autres catégories
             <QuoteViewer
               quotes={filteredQuotes}
               onToggleFavorite={toggleFavorite}
@@ -325,8 +357,9 @@ function AppContent() {
               }}
               onDelete={(id) => setDeleteConfirmation(id)}
             />
-          </div>
-        </main>
+          )}
+        </div>
+      </main>
       </div>
 
       {showForm && (

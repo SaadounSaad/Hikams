@@ -1,9 +1,14 @@
 // Sidebar.tsx - Modifié pour gérer la nouvelle sous-navigation
-import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Heart, SortDesc, Settings, LogOut, BookMarked } from 'lucide-react';
-import { categoryManager, getIconComponent } from '../utils/categories';
+import React, { useState } from 'react';
+import { Search, Calendar, Heart, SortDesc, Settings, LogOut, BookMarked, Star } from 'lucide-react';
+import { categoryManager } from '../utils/categories';
 import { useAuth } from '../contexts/AuthContext';
-
+// Ajoutez cette interface au début du fichier
+interface SubCategory {
+  id: string;
+  name: string;
+  parentId: string;
+}
 interface SidebarProps {
   selectedCategory: string;
   currentCategoryFilter: string;
@@ -36,11 +41,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Catégories principales
   const mainCategories = [
+    { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" />, isDefault: true, hasSubCategories: true },
+    { id: 'separator1', type: 'separator' },
     { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
     { id: 'mukhtarat', name: 'مختارات', icon: <BookMarked className="w-5 h-5" />, count: 829 },
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
   ];
-
+  
+  const mirajSubCategories: SubCategory[] = [
+    { id: 'wird', name: 'الورد اليومي', parentId: 'miraj-arwah' },
+    { id: 'azkar', name: 'أذكار الصباح و المساء', parentId: 'miraj-arwah' },
+    // Ajoutez les autres boutons comme sous-catégories
+  ];
   return (
     <>
       {/* Overlay pour mobile */}
@@ -106,7 +118,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ))}
           </div>
-
+    
+    {/* Sous-catégories pour معراج الأرواح */}
+    {selectedCategory === 'miraj-arwah' && (
+      <div className="mt-2 ml-4 space-y-1 border-l border-gray-200 pl-2">
+        {mirajSubCategories.map((subCategory) => (
+          <button
+            key={subCategory.id}
+            onClick={() => onCategoryChange(subCategory.id)}
+            className={`w-full flex items-center py-1.5 px-3 rounded-lg transition-colors text-right ${
+              selectedCategory === subCategory.id
+                ? 'bg-sky-50 text-sky-600'
+                : 'hover:bg-gray-50 text-gray-700'
+            }`}
+          >
+            <span className="font-arabic">{subCategory.name}</span>
+          </button>
+        ))}
+      </div>
+    )}
           {/* Tri */}
           <div className="mt-6">
             <div className="border-t border-gray-200 pt-4">
