@@ -302,26 +302,7 @@ const GenericThikrPage: React.FC<GenericThikrPageProps> = ({ contentId, onBack }
             )}
           </div>
 
-          {/* Contrôle de taille de texte */}
-          <div className="fixed bottom-20 right-4 bg-white/90 rounded-full shadow-lg flex items-center z-10 border border-gray-200">
-            <button 
-              onClick={decreaseTextSize} 
-              className="p-2 text-gray-600 hover:text-blue-600"
-              title="Diminuer la taille du texte"
-            >
-              <Minus className="w-5 h-5" />
-            </button>
-            <div className="px-2 text-sm font-medium">
-              {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
-            </div>
-            <button 
-              onClick={increaseTextSize} 
-              className="p-2 text-gray-600 hover:text-blue-600"
-              title="Augmenter la taille du texte"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
+          
 
           {/* Bouton de lecture */}
           {!loading && thikrItem && (
