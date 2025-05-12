@@ -1,3 +1,4 @@
+// src/components/QuoteViewer.tsx
 import React, { useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library } from 'lucide-react';
 import { Quote } from '../types';
@@ -6,9 +7,9 @@ import { updateBookmark } from '../utils/bookmarkService';
 
 interface QuoteViewerProps {
   quotes: Quote[];
+  currentIndex: number;
+  onIndexChange: (index: number) => void;
   selectedCategory: string;
-  currentQuoteIndex: number;
-  setCurrentQuoteIndex: (index: number) => void;
   onToggleFavorite: (id: string) => void;
   onEdit: (quote: Quote) => void;
   onDelete: (id: string) => void;
@@ -16,36 +17,39 @@ interface QuoteViewerProps {
 
 export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   quotes,
+  currentIndex,
+  onIndexChange,
   selectedCategory,
-  currentQuoteIndex,
-  setCurrentQuoteIndex,
   onToggleFavorite,
   onEdit,
-  onDelete
+  onDelete,
 }) => {
   useEffect(() => {
-    if (currentQuoteIndex >= quotes.length) {
-      setCurrentQuoteIndex(Math.max(0, quotes.length - 1));
+    // Assure qu’on ne dépasse pas la longueur disponible
+    if (currentIndex >= quotes.length && quotes.length > 0) {
+      onIndexChange(0);
     }
-  }, [quotes.length, currentQuoteIndex, setCurrentQuoteIndex]);
+  }, [quotes, currentIndex, onIndexChange]);
 
   const handleSwipe = (direction: 'left' | 'right') => {
-    const newIndex = direction === 'left'
-      ? (currentQuoteIndex < quotes.length - 1 ? currentQuoteIndex + 1 : 0)
-      : (currentQuoteIndex > 0 ? currentQuoteIndex - 1 : quotes.length - 1);
-
-    setCurrentQuoteIndex(newIndex);
+    let newIndex = currentIndex;
+    if (direction === 'left') {
+      newIndex = currentIndex < quotes.length - 1 ? currentIndex + 1 : 0;
+    } else {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : quotes.length - 1;
+    }
+    onIndexChange(newIndex);
     updateBookmark(selectedCategory, newIndex);
   };
 
   const handleNavigateToFirst = () => {
-    setCurrentQuoteIndex(0);
+    onIndexChange(0);
     updateBookmark(selectedCategory, 0);
   };
 
   const handleNavigateToLast = () => {
     const last = quotes.length - 1;
-    setCurrentQuoteIndex(last);
+    onIndexChange(last);
     updateBookmark(selectedCategory, last);
   };
 
@@ -65,28 +69,28 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <button onClick={handleNavigateToFirst} className="p-3 rounded-full hover:bg-white/50" title="Première citation">
+          <button onClick={handleNavigateToFirst} className="p-3 rounded-full hover:bg-white/50">
             <ChevronsLeft className="w-6 h-6" />
           </button>
-          <button onClick={() => handleSwipe('right')} className="p-3 rounded-full hover:bg-white/50" title="Citation précédente">
+          <button onClick={() => handleSwipe('right')} className="p-3 rounded-full hover:bg-white/50">
             <ChevronLeft className="w-6 h-6" />
           </button>
         </div>
         <span className="text-sm font-medium text-gray-500 bg-white/50 px-4 py-2 rounded-full">
-          {currentQuoteIndex + 1} / {quotes.length}
+          {currentIndex + 1} / {quotes.length}
         </span>
         <div className="flex items-center gap-2">
-          <button onClick={() => handleSwipe('left')} className="p-3 rounded-full hover:bg-white/50" title="Citation suivante">
+          <button onClick={() => handleSwipe('left')} className="p-3 rounded-full hover:bg-white/50">
             <ChevronRight className="w-6 h-6" />
           </button>
-          <button onClick={handleNavigateToLast} className="p-3 rounded-full hover:bg-white/50" title="Dernière citation">
+          <button onClick={handleNavigateToLast} className="p-3 rounded-full hover:bg-white/50">
             <ChevronsRight className="w-6 h-6" />
           </button>
         </div>
       </div>
 
       <QuoteCard
-        quote={quotes[currentQuoteIndex]}
+        quote={quotes[currentIndex]}
         onToggleFavorite={onToggleFavorite}
         onEdit={onEdit}
         onDelete={onDelete}

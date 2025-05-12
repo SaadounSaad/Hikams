@@ -17,7 +17,7 @@ import WirdPage from './components/WirdPage';
 import AlbaqiatPage from './components/AlbaqiatPage';  // Si ce composant existe
 import GenericThikrPage from './components/GenericThikrPage';
 import MirajArwahPage from './components/MirajArwahPage';
-import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
+import { getSavedPageIndex } from './utils/bookmarkService';
 
 
 // Composant App principal qui utilise tous nos nouveaux composants
@@ -45,6 +45,14 @@ const totalMukhtarat = quotes.filter(q => categoryManager.isMukhtaratSubCategory
 const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
 
 
+useEffect(() => {
+  async function loadBookmarkIndex() {
+    const index = await getSavedPageIndex(selectedCategory);
+    setCurrentQuoteIndex(index);
+  }
+
+  loadBookmarkIndex();
+}, [selectedCategory]);
 
   // Effet pour fermer le menu lors d'un clic à l'extérieur
   useEffect(() => {
@@ -370,9 +378,9 @@ const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
             // Rendu normal pour les autres catégories
             <QuoteViewer
               quotes={filteredQuotes}
+              currentIndex={currentQuoteIndex}
+              onIndexChange={setCurrentQuoteIndex}
               selectedCategory={selectedCategory}
-              currentQuoteIndex={currentQuoteIndex}
-              setCurrentQuoteIndex={setCurrentQuoteIndex}
               onToggleFavorite={toggleFavorite}
               onEdit={(quote) => {
                 setEditingQuote(quote);
@@ -380,8 +388,6 @@ const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
               }}
               onDelete={(id) => setDeleteConfirmation(id)}
             />
-
-
           )}
         </div>
       </main>

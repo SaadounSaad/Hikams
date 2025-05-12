@@ -8,7 +8,6 @@ export async function updateBookmark(categoryId: string, index: number): Promise
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Utilisateur non connecté');
 
-    // Vérifie si un bookmark existe déjà
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .select('id')
@@ -19,7 +18,6 @@ export async function updateBookmark(categoryId: string, index: number): Promise
     if (error) throw error;
 
     if (data) {
-      // Mise à jour du bookmark existant
       const { error: updateError } = await supabase
         .from(TABLE_NAME)
         .update({ index })
@@ -27,7 +25,6 @@ export async function updateBookmark(categoryId: string, index: number): Promise
 
       if (updateError) throw updateError;
     } else {
-      // Création d’un nouveau bookmark
       const { error: insertError } = await supabase
         .from(TABLE_NAME)
         .insert({
