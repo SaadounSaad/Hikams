@@ -43,31 +43,42 @@ class Storage {
       await this.ensureConnection();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-
-      let query = supabase
-        .from('quotes')
-        .select('*')
-        .eq('user_id', user.id);
-
-      switch (sortOrder) {
-        case 'newest':
-          query = query.order('created_at', { ascending: false });
-          break;
-        case 'oldest':
-          query = query.order('created_at', { ascending: true });
-          break;
+  
+      const pageSize = 1000;
+      let page = 0;
+      let allData: any[] = [];
+      let hasMore = true;
+  
+      while (hasMore) {
+        let query = supabase
+          .from('quotes')
+          .select('*')
+          .eq('user_id', user.id)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+  
+        switch (sortOrder) {
+          case 'newest':
+            query = query.order('created_at', { ascending: false });
+            break;
+          case 'oldest':
+            query = query.order('created_at', { ascending: true });
+            break;
           case 'scheduled':
             query = query
               .order('scheduled_date', { ascending: true, nullsLast: true } as any)
               .order('created_at', { ascending: true });
             break;
+        }
+  
+        const { data, error } = await query;
+        if (error) throw error;
+  
+        allData = [...allData, ...data];
+        hasMore = data.length === pageSize;
+        page++;
       }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      const quotes = data.map(quote => ({
+  
+      const quotes = allData.map(quote => ({
         id: quote.id,
         text: quote.text,
         category: quote.category,
@@ -76,13 +87,36 @@ class Storage {
         createdAt: quote.created_at,
         scheduledDate: quote.scheduled_date,
       }));
-
+  
       return sortOrder === 'random' ? quotes.sort(() => Math.random() - 0.5) : quotes;
     } catch (error) {
       console.error('Error fetching quotes:', error);
       return [];
     }
   }
+  async updateBookmark(category: string, pageIndex: number): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+  
+    const { data, error: fetchError } = await supabase
+      .from('user_preferences')
+      .select('bookmarks')
+      .eq('user_id', user.id)
+      .single();
+  
+    const currentBookmarks = data?.bookmarks || {};
+    currentBookmarks[category] = pageIndex;
+  
+    const { error: updateError } = await supabase
+      .from('user_preferences')
+      .update({ bookmarks: currentBookmarks })
+      .eq('user_id', user.id);
+  
+    if (updateError) {
+      console.error('Erreur mise à jour bookmarks:', updateError);
+    }
+  }
+  
 
   async saveQuote(quote: Quote): Promise<void> {
     try {

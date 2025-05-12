@@ -17,6 +17,7 @@ import WirdPage from './components/WirdPage';
 import AlbaqiatPage from './components/AlbaqiatPage';  // Si ce composant existe
 import GenericThikrPage from './components/GenericThikrPage';
 import MirajArwahPage from './components/MirajArwahPage';
+import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
 
 
 // Composant App principal qui utilise tous nos nouveaux composants
@@ -37,6 +38,13 @@ function AppContent() {
   const [filteredQuotes, setFilteredQuotes] = useState<Quote[]>([]);
   const [searchResults, setSearchResults] = useState<Quote[]>([]);
   const [mirajSubcategory, setMirajSubcategory] = useState<string | null>(null);
+// Obtenir les sous-catégories مختارات
+const totalMukhtarat = quotes.filter(q => categoryManager.isMukhtaratSubCategory(q.category)).length;
+ // const totalCount = quotes.filter(q => categoryManager.isMukhtaratSubCategory(q.category)).length;
+
+const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
+
+
 
   // Effet pour fermer le menu lors d'un clic à l'extérieur
   useEffect(() => {
@@ -104,10 +112,11 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation]);
 
+  
   // Effet pour filtrer les citations en fonction de la catégorie sélectionnée
   useEffect(() => {
     let newFilteredQuotes: Quote[] = [];
-    
+
     if (selectedCategory === 'daily') {
       newFilteredQuotes = dailyQuotes;
     } 
@@ -120,21 +129,30 @@ function AppContent() {
       newFilteredQuotes = quotes.filter(quote => quote.isFavorite);
     }
     else if (selectedCategory === 'mukhtarat') {
-      // Pour مختارات, inclure toutes les citations de ses sous-catégories
       const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
       newFilteredQuotes = quotes.filter(quote => subCategories.includes(quote.category));
     }
     else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
-      // Pour une sous-catégorie spécifique de مختارات
       newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
     }
     else {
-      // Pour toutes les autres catégories
       newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
     }
-    
+
     setFilteredQuotes(newFilteredQuotes);
+
+    // ⚠️ Ajout : charger l’index de la dernière page pour cette catégorie
+    getSavedPageIndex(selectedCategory).then((index: number | undefined) => {
+
+      if (index !== undefined && index < newFilteredQuotes.length) {
+        setCurrentQuoteIndex(index);
+      } else {
+        setCurrentQuoteIndex(0);
+      }
+    });
+
   }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]);
+
 
   // Gestionnaire pour la recherche
   const handleSearch = useCallback((results: Quote[]) => {
@@ -236,7 +254,9 @@ function AppContent() {
 
   // Obtenir les sous-catégories مختارات
   const mukhtaratSubCategories = categoryManager.getMukhtaratSubCategories();
-  const totalCount = mukhtaratSubCategories.reduce((acc, cat) => acc + (cat.count || 0), 0);
+ 
+
+
 
   return (
     <div className={`min-h-screen ${isSepiaMode ? 'bg-gradient-to-br from-amber-50/50 to-amber-50' : 'bg-gradient-to-br from-slate-50 to-white'}`}>
@@ -259,8 +279,8 @@ function AppContent() {
               <div className="flex items-center">
                 <span className="text-xs font-medium px-2 py-1 rounded-md bg-sky-100 text-sky-600">
                   {selectedCategory === 'mukhtarat' 
-                    ? `${totalCount}/829` 
-                    : `${mukhtaratSubCategories.find(cat => cat.id === selectedCategory)?.count || 0}/829`}
+                    ? `${filteredQuotes.length}/${totalMukhtarat}` 
+                    : `${filteredQuotes.length}/${totalMukhtarat}`}
                 </span>
               </div>
             )}
@@ -350,6 +370,9 @@ function AppContent() {
             // Rendu normal pour les autres catégories
             <QuoteViewer
               quotes={filteredQuotes}
+              selectedCategory={selectedCategory}
+              currentQuoteIndex={currentQuoteIndex}
+              setCurrentQuoteIndex={setCurrentQuoteIndex}
               onToggleFavorite={toggleFavorite}
               onEdit={(quote) => {
                 setEditingQuote(quote);
@@ -357,6 +380,8 @@ function AppContent() {
               }}
               onDelete={(id) => setDeleteConfirmation(id)}
             />
+
+
           )}
         </div>
       </main>

@@ -44,7 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" />, isDefault: true, hasSubCategories: true },
     { id: 'separator1', type: 'separator' },
     { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'مختارات', icon: <BookMarked className="w-5 h-5" />, count: 829 },
+    { id: 'mukhtarat', name: 'مختارات', isDefault: true, hasSubCategories: true },
+
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
   ];
   

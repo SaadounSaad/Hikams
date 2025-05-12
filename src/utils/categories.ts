@@ -1,5 +1,21 @@
 import { Category } from '../types';
 import { BookOpen, Brain, Scroll, Star, BookMarked } from 'lucide-react';
+import { Quote } from '../types';
+
+
+export const getMukhtaratSubCategories = () => {
+  return [
+    { id: 'verses', name: 'آيات مِفتاحية', icon: 'book-open' },
+    { id: 'hadiths', name: 'هَدْي نَبَوي', icon: 'book' },
+    { id: 'thoughts', name: 'دُرَرْ', icon: 'pen-line' }
+  ];
+};
+
+export const countQuotesInMukhtarat = (quotes: Quote[]): number => {
+  const subCategoryIds = getMukhtaratSubCategories().map(sub => sub.id);
+  return quotes.filter(q => subCategoryIds.includes(q.category)).length;
+};
+
 
 // Types étendus pour gérer les sous-catégories
 interface ExtendedCategory extends Category {
@@ -10,16 +26,17 @@ interface ExtendedCategory extends Category {
 
 // Catégories par défaut qui ne peuvent pas être supprimées
 const defaultCategories: ExtendedCategory[] = [
-  { id: 'verses', name: 'آيات مِفتاحية', icon: 'book-open', isDefault: true, parentId: 'mukhtarat', count: 132 },
-  { id: 'hadiths', name: 'هَدْي نَبَوي', icon: 'scroll', isDefault: true, parentId: 'mukhtarat', count: 257 },
-  { id: 'thoughts', name: 'دُرَرْ', icon: 'brain', isDefault: true, parentId: 'mukhtarat', count: 440 },
+  { id: 'verses', name: 'آيات مِفتاحية', icon: 'book-open', isDefault: true, parentId: 'mukhtarat' },
+  { id: 'hadiths', name: 'هَدْي نَبَوي', icon: 'scroll', isDefault: true, parentId: 'mukhtarat' },
+  { id: 'thoughts', name: 'دُرَرْ', icon: 'brain', isDefault: true, parentId: 'mukhtarat' },
 ];
 
 // Catégories principales du système
 const mainCategories: ExtendedCategory[] = [
     { id: 'miraj-arwah', name: 'معراج الأرواح', icon: 'Star', isDefault: true, hasSubCategories: true },
   { id: 'daily', name: 'حكمة اليوم', icon: 'calendar', isDefault: true },
-  { id: 'mukhtarat', name: 'مختارات', icon: 'bookmarks', isDefault: true, hasSubCategories: true, count: 829 },
+  { id: 'mukhtarat', name: 'مختارات', icon: 'bookmarks', isDefault: true, hasSubCategories: true } ,
+
   { id: 'favorites', name: 'المفضلة', icon: 'heart', isDefault: true },
 ];
 const mirajSubCategories: SubCategory[] = [
@@ -27,6 +44,7 @@ const mirajSubCategories: SubCategory[] = [
   { id: 'azkar', name: 'أذكار الصباح و المساء', parentId: 'miraj-arwah' },
   // Ajoutez les autres boutons comme sous-catégories
 ];
+
 
 export const getIconComponent = (iconName: string) => {
   switch (iconName) {
