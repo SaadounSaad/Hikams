@@ -1,6 +1,6 @@
 // Sidebar.tsx - Modifié pour gérer la nouvelle sous-navigation
 import React, { useState } from 'react';
-import { Search, Calendar, Heart, SortDesc, Settings, LogOut, BookMarked, Star } from 'lucide-react';
+import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star } from 'lucide-react';
 import { categoryManager } from '../utils/categories';
 import { useAuth } from '../contexts/AuthContext';
 // Ajoutez cette interface au début du fichier
@@ -21,9 +21,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   selectedCategory,
-  currentCategoryFilter,
   onCategoryChange,
-  onSearch,
   isOpen,
   onClose,
   onShowSettings
@@ -46,7 +44,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
     { id: 'mukhtarat', name: 'مختارات', isDefault: true, hasSubCategories: true },
 
-    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
+    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
+    {
+      id: 'book-library',
+      name: '📚  الرقائق',
+      isDefault: false,
+      hasSubCategories: false
+    }
+
   ];
   
   const mirajSubCategories: SubCategory[] = [

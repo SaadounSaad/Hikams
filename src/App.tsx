@@ -18,6 +18,9 @@ import AlbaqiatPage from './components/AlbaqiatPage';  // Si ce composant existe
 import GenericThikrPage from './components/GenericThikrPage';
 import MirajArwahPage from './components/MirajArwahPage';
 import { getSavedPageIndex } from './utils/bookmarkService';
+import BookReaderPage from './components/BookReaderPage';
+import BookLibraryPage from './components/BookLibraryPage';
+
 
 
 // Composant App principal qui utilise tous nos nouveaux composants
@@ -43,7 +46,7 @@ const totalMukhtarat = quotes.filter(q => categoryManager.isMukhtaratSubCategory
  // const totalCount = quotes.filter(q => categoryManager.isMukhtaratSubCategory(q.category)).length;
 
 const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
-
+const [selectedBookTitle, setSelectedBookTitle] = useState<string | null>(null);
 
 useEffect(() => {
   async function loadBookmarkIndex() {
@@ -354,28 +357,30 @@ useEffect(() => {
       <main className="flex-1 p-6">
         <div className="max-w-3xl mx-auto relative">
           {selectedCategory === 'miraj-arwah' ? (
-            <>
-              {mirajSubcategory ? (
-                // Rendu des sous-catégories
-                <>
-                  {mirajSubcategory === 'wird' ? (
-                    <WirdPage onBack={() => setMirajSubcategory(null)} />
-                  ) : mirajSubcategory === 'baqiyat' ? (
-                    <AlbaqiatPage onBack={() => setMirajSubcategory(null)} />
-                  ) : (
-                    <GenericThikrPage 
-                      contentId={mirajSubcategory} 
-                      onBack={() => setMirajSubcategory(null)} 
-                    />
-                  )}
-                </>
+            mirajSubcategory ? (
+              mirajSubcategory === 'wird' ? (
+                <WirdPage onBack={() => setMirajSubcategory(null)} />
+              ) : mirajSubcategory === 'baqiyat' ? (
+                <AlbaqiatPage onBack={() => setMirajSubcategory(null)} />
               ) : (
-                // Page principale de معراج الأرواح avec la grille de boutons
-                <MirajArwahPage onSelectSubcategory={setMirajSubcategory} />
-              )}
-            </>
+                <GenericThikrPage
+                  contentId={mirajSubcategory}
+                  onBack={() => setMirajSubcategory(null)}
+                />
+              )
+            ) : (
+              <MirajArwahPage onSelectSubcategory={setMirajSubcategory} />
+            )
+          ) : selectedCategory === 'book-library' ? (
+            selectedBookTitle ? (
+              <BookReaderPage
+                bookTitle={selectedBookTitle}
+                onBack={() => setSelectedBookTitle(null)}
+              />
+            ) : (
+              <BookLibraryPage onSelectBook={setSelectedBookTitle} />
+            )
           ) : (
-            // Rendu normal pour les autres catégories
             <QuoteViewer
               quotes={filteredQuotes}
               currentIndex={currentQuoteIndex}
@@ -391,6 +396,9 @@ useEffect(() => {
           )}
         </div>
       </main>
+
+
+
       </div>
 
       {showForm && (
