@@ -1,4 +1,4 @@
-// ✅ BookEntryCard.tsx refait pour lecture immersive + favori intégré
+// ✅ BookEntryCard.tsx avec ref unifiée pour lecture automatique fiable
 import React, { useEffect, useRef, useState } from 'react';
 import { PlayCircle, PauseCircle, Plus, Minus, X, Heart } from 'lucide-react';
 
@@ -36,16 +36,8 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
   }, [scrollSpeed]);
 
   useEffect(() => {
-    const checkForScrollbar = () => {
-      const el = scrollRef.current;
-      if (el) {
-        const hasScroll = el.scrollHeight > el.clientHeight;
-        setHasScrollbar(hasScroll);
-      }
-    };
-    checkForScrollbar();
-    window.addEventListener('resize', checkForScrollbar);
-    return () => window.removeEventListener('resize', checkForScrollbar);
+    const el = scrollRef.current;
+    if (el) setHasScrollbar(el.scrollHeight > el.clientHeight);
   }, [entry.content, textSizeIndex]);
 
   useEffect(() => {
@@ -54,9 +46,9 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
     let pixelRemainder = 0;
 
     const scroll = (currentTime: number) => {
-      if (!isScrolling || !scrollRef.current) return;
-
       const el = scrollRef.current;
+      if (!isScrolling || !el) return;
+
       const maxScroll = el.scrollHeight - el.clientHeight;
 
       if (lastTimestamp !== null) {
@@ -67,17 +59,12 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
         pixelRemainder = pixelsToScroll - intPixels;
 
         if (intPixels > 0) el.scrollTop += intPixels;
-
-        if (maxScroll > 0) {
-          setScrollProgress((el.scrollTop / maxScroll) * 100);
-        }
-
+        if (maxScroll > 0) setScrollProgress((el.scrollTop / maxScroll) * 100);
         if (el.scrollTop + el.clientHeight >= el.scrollHeight) {
           setIsScrolling(false);
           return;
         }
       }
-
       lastTimestamp = currentTime;
       animationId = requestAnimationFrame(scroll);
     };
@@ -86,13 +73,11 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
       lastTimestamp = null;
       animationId = requestAnimationFrame(scroll);
     }
-
     return () => cancelAnimationFrame(animationId);
   }, [isScrolling]);
 
   const toggleFavorite = () => {
     setIsFavorite(!isFavorite);
-    // TODO: intégrer un appel à Supabase ou localStorage pour sauvegarder les favoris
   };
 
   const style = {
@@ -102,43 +87,36 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
 
   return (
     <div className="relative">
-      {!isReading ? (
-        <div className="relative p-6 rounded-xl bg-white shadow max-w-3xl mx-auto">
-          {hasScrollbar && (
-            <button
-              onClick={() => {
-                setIsReading(true);
-                setIsScrolling(true);
-              }}
-              className="absolute top-2 right-4 flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full bg-gray-400/30 hover:bg-gray-400 text-white backdrop-blur-sm shadow-sm"
-            >
-              <PlayCircle className="w-4 h-4" /> Lecture
-            </button>
-          )}
-
-          <div
-            ref={scrollRef}
-            className="max-h-[calc(100vh-12rem)] overflow-y-auto whitespace-pre-wrap font-arabic"
-            dir="rtl"
-            style={style}
-          >
+      <div
+        ref={scrollRef}
+        className={`${
+          isReading ? 'fixed inset-0 bg-white z-50 flex flex-col' : 'relative p-6 rounded-xl bg-white shadow max-w-3xl mx-auto'
+        }`}
+        dir="rtl"
+        style={style}
+        onClick={() => isReading && setShowControls(true)}
+      >
+        <div className={isReading ? 'flex-1 overflow-y-auto px-6 py-8' : 'max-h-[calc(100vh-12rem)] overflow-y-auto whitespace-pre-wrap font-arabic'}>
+          <p className="whitespace-pre-wrap font-arabic max-w-3xl mx-auto">
             {entry.content}
-          </div>
+          </p>
         </div>
-      ) : (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
-          <div
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto px-6 py-8"
-            onClick={() => setShowControls(true)}
-            style={style}
-            dir="rtl"
-          >
-            <p className="whitespace-pre-wrap font-arabic max-w-3xl mx-auto">
-              {entry.content}
-            </p>
-          </div>
+      </div>
 
+      {!isReading && hasScrollbar && (
+        <button
+          onClick={() => {
+            setIsReading(true);
+            setIsScrolling(true);
+          }}
+          className="absolute top-2 right-4 flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full bg-gray-400/30 hover:bg-gray-400 text-white backdrop-blur-sm shadow-sm"
+        >
+          <PlayCircle className="w-4 h-4" /> Lecture
+        </button>
+      )}
+
+      {isReading && (
+        <>
           <div className="fixed bottom-0 left-0 right-0 h-1 bg-gray-200">
             <div className="h-full bg-blue-600 transition-all duration-100" style={{ width: `${scrollProgress}%` }} />
           </div>
@@ -175,7 +153,7 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
               </div>
             </>
           )}
-        </div>
+        </>
       )}
     </div>
   );
