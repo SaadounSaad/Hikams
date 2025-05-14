@@ -53,11 +53,12 @@ const BookLibraryPage: React.FC<BookLibraryPageProps> = ({ onSelectBook }) => {
           {books.map((book, index) => (
             <button
               key={index}
-              onClick={() => onSelectBook(book.book_title)}
+              onClick={() => onSelectBook(book.book_name)} // 🟢 utiliser book_name ici !
               className="w-full bg-white shadow-md rounded-lg p-4 hover:bg-sky-50 transition-colors text-right"
             >
-              <span className="font-arabic text-lg">{book.book_title}</span>
+              <span className="font-arabic text-lg">{book.book_title}</span> {/* Affichage humain */}
             </button>
+
           ))}
         </div>
 
