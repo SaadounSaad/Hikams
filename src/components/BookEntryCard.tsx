@@ -1,4 +1,4 @@
-// ✅ BookEntryCard.tsx avec taille de texte dynamique appliquée au paragraphe principal
+// ✅ BookEntryCard.tsx : défilement basé sur scrollHeight - lié à l’ascenseur
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PlayCircle, PauseCircle, Plus, Minus, X, Heart } from 'lucide-react';
 
@@ -48,26 +48,29 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
   useEffect(() => {
     let animationId: number;
     let lastTimestamp: number | null = null;
-    let pixelRemainder = 0;
 
     const scroll = (currentTime: number) => {
       const el = scrollRef.current;
       if (!isScrolling || !el) return;
 
       const maxScroll = el.scrollHeight - el.clientHeight;
+
       if (lastTimestamp !== null) {
         const elapsed = currentTime - lastTimestamp;
-        const pixelsPerMs = scrollSpeedRef.current / 1000;
-        const pixelsToScroll = elapsed * pixelsPerMs + pixelRemainder;
-        const intPixels = Math.floor(pixelsToScroll);
-        pixelRemainder = pixelsToScroll - intPixels;
-        if (intPixels > 0) el.scrollTop += intPixels;
-        if (maxScroll > 0) setScrollProgress((el.scrollTop / maxScroll) * 100);
-        if (el.scrollTop + el.clientHeight >= el.scrollHeight) {
+        const pixelsToScroll = (elapsed * scrollSpeedRef.current) / 1000; // px/sec
+
+        el.scrollTop = Math.min(el.scrollTop + pixelsToScroll, maxScroll);
+
+        if (maxScroll > 0) {
+          setScrollProgress((el.scrollTop / maxScroll) * 100);
+        }
+
+        if (el.scrollTop >= maxScroll) {
           setIsScrolling(false);
           return;
         }
       }
+
       lastTimestamp = currentTime;
       animationId = requestAnimationFrame(scroll);
     };
