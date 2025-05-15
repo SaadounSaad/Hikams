@@ -20,7 +20,9 @@ const FONT_SIZES = [
 ];
 
 const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
+  const [hasResume, setHasResume] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastPositionKey = `scroll-pos-${entry.book_title}-${entry.id}`;
   const [isReading, setIsReading] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [showControls, setShowControls] = useState(false);
@@ -36,6 +38,25 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
   useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;
   }, [scrollSpeed]);
+
+  // ▶️ Reprendre la position sauvegardée
+  useEffect(() => {
+    const el = scrollRef.current;
+    const saved = localStorage.getItem(lastPositionKey);
+    if (el && saved) {
+      const value = parseFloat(saved);
+      el.scrollTop = value;
+      if (value > 0) setHasResume(true);
+    }
+  }, [entry.id]);
+
+  // 💾 Sauvegarde automatique en quittant le mode lecture
+  useEffect(() => {
+    return () => {
+      const el = scrollRef.current;
+      if (el) localStorage.setItem(lastPositionKey, el.scrollTop.toString());
+    };
+  }, [entry.id]);
 
   useEffect(() => {
     const checkScroll = () => {
@@ -127,7 +148,12 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
             </button>
           )}
           <div ref={scrollRef} className="max-h-[calc(100vh-12rem)] overflow-y-auto whitespace-pre-wrap font-arabic" dir="rtl">
-            <p className="whitespace-pre-wrap font-arabic max-w-3xl mx-auto" style={textStyle}>{entry.content}</p>
+            <p className="relative whitespace-pre-wrap font-arabic max-w-3xl mx-auto" style={textStyle}>
+              {hasResume && (
+                <span className="absolute -top-4 left-4 text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full shadow-sm animate-pulse z-10">
+                  🔄 Reprise auto
+                </span>
+              )}{entry.content}</p>
           </div>
         </div>
       ) : (
