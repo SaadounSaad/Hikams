@@ -2,7 +2,11 @@ import { Category } from '../types';
 import { BookOpen, Brain, Scroll, Star, BookMarked } from 'lucide-react';
 import { Quote } from '../types';
 
-
+interface SubCategory {
+  id: string;
+  name: string;
+  parentId: string;
+}
 export const getMukhtaratSubCategories = () => {
   return [
     { id: 'verses', name: 'آيات مِفتاحية', icon: 'book-open' },

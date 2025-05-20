@@ -8,7 +8,7 @@
       - `category` (text, obligatoire)
       - `source` (text)
       - `is_favorite` (boolean)
-      - `created_at` (timestamp avec fuseau horaire)
+      - `createdAt` (timestamp avec fuseau horaire)
       - `scheduled_date` (timestamp avec fuseau horaire)
       - `user_id` (uuid, clé étrangère vers auth.users)
 
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS quotes (
   category text NOT NULL,
   source text,
   is_favorite boolean DEFAULT false,
-  created_at timestamptz DEFAULT now(),
+  createdAt timestamptz DEFAULT now(),
   scheduled_date timestamptz,
   user_id uuid REFERENCES auth.users(id) NOT NULL
 );

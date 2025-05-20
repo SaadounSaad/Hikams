@@ -1,9 +1,8 @@
-// Étape 1: Créer un Context pour la gestion des quotes
-
 // QuoteContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Quote } from '../types';
 import { storage } from "../utils/storage";
+import { updateBookmark } from "../utils/bookmarkService"; // Ajouté pour la fonctionnalité de bookmark
 
 type SortOrder = 'newest' | 'oldest' | 'scheduled' | 'random';
 
@@ -16,7 +15,7 @@ interface QuoteContextType {
   addQuote: (quote: Quote) => Promise<void>;
   updateQuote: (quote: Quote) => Promise<void>;
   deleteQuote: (id: string) => Promise<void>;
-  toggleFavorite: (id: string) => Promise<void>;
+  toggleFavorite: (id: string, categoryId?: string, quoteIndex?: number, onSuccess?: () => void) => Promise<void>; // Modifié pour accepter un callback
   deleteAllQuotes: () => Promise<void>;
   refresh: () => Promise<void>;
   totalCount: number;
@@ -39,12 +38,12 @@ export const QuoteProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         storage.getQuotesCount(),
         storage.getDailyQuotes()
       ]);
-
+      
       let processedQuotes = storedQuotes;
       if (sortOrder === 'random') {
         processedQuotes = [...storedQuotes].sort(() => Math.random() - 0.5);
       }
-
+      
       setQuotes(processedQuotes);
       setTotalCount(count);
       setDailyQuotes(dailyQuotes);
@@ -74,12 +73,44 @@ export const QuoteProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await loadQuotes();
   };
 
-  const toggleFavorite = async (id: string) => {
-    await storage.toggleFavorite(id);
-    const updatedQuotes = quotes.map(quote => 
-      quote.id === id ? { ...quote, isFavorite: !quote.isFavorite } : quote
-    );
-    setQuotes(updatedQuotes);
+  // Fonction toggleFavorite modifiée pour intégrer la logique de bookmark et le callback
+  const toggleFavorite = async (id: string, categoryId?: string, quoteIndex?: number, onSuccess?: () => void) => {
+    try {
+      // Trouver la citation pour connaître son état actuel
+      const quote = quotes.find(q => q.id === id);
+      const currentIsFavorite = quote?.isFavorite || false;
+      
+      // Appeler l'API pour basculer l'état favori
+      await storage.toggleFavorite(id);
+      
+      // Mettre à jour l'état local des citations
+      const updatedQuotes = quotes.map(quote =>
+        quote.id === id ? { ...quote, isFavorite: !quote.isFavorite } : quote
+      );
+      setQuotes(updatedQuotes);
+      
+      // Également mettre à jour les citations quotidiennes si nécessaire
+      setDailyQuotes(prevDailyQuotes => 
+        prevDailyQuotes.map(quote => 
+          quote.id === id ? { ...quote, isFavorite: !quote.isFavorite } : quote
+        )
+      );
+      
+      // Si les paramètres optionnels sont fournis et qu'on active le favori, mettre à jour le bookmark
+      if (categoryId && quoteIndex !== undefined && !currentIsFavorite) {
+        await updateBookmark(categoryId, quoteIndex);
+        console.log(`Citation marquée comme favori et bookmarkée à l'index ${quoteIndex}`);
+      }
+      
+      // Appeler le callback de succès après un court délai pour laisser React terminer ses mises à jour
+      if (onSuccess) {
+        setTimeout(() => {
+          onSuccess();
+        }, 50);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
   };
 
   const deleteAllQuotes = async () => {

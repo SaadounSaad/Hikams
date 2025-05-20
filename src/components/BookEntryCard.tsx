@@ -1,6 +1,9 @@
-// ✅ BookEntryCard.tsx : meilleure détection de scroll réel pour lecture/contrôles
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+// BookEntryCard.tsx - Version corrigée avec le nouveau service unifié
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { PlayCircle, PauseCircle, Plus, Minus, X, Heart } from 'lucide-react';
+import { useFavorites } from '../services/FavoritesServices'; // ← Utiliser le nouveau service
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext'; // ← Ajouter pour obtenir user
 
 interface BookEntryCardProps {
   entry: {
@@ -8,6 +11,7 @@ interface BookEntryCardProps {
     content: string;
     ordre: number;
     book_title: string;
+    is_favorite?: boolean; // ← Ajouter cette propriété
   };
 }
 
@@ -17,190 +21,558 @@ const FONT_SIZES = [
   { name: 'text-3xl', size: '1.875rem', lineHeight: '2.75rem' },
   { name: 'text-4xl', size: '2.25rem', lineHeight: '3rem' },
   { name: 'text-5xl', size: '3rem', lineHeight: '3.5rem' },
-];
+] as const;
+
+interface ScrollState {
+  isReading: boolean;
+  isScrolling: boolean;
+  showControls: boolean;
+  speed: number;
+  progress: number;
+}
+
+interface UIState {
+  textSizeIndex: number;
+  hasScrollbar: boolean;
+  hasResume: boolean;
+}
+
+interface BookmarkState {
+  isBookmarked: boolean;
+}
 
 const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
-  const [hasResume, setHasResume] = useState(false);
+  // 🔥 NOUVEAU SERVICE UNIFIÉ
+  const { user } = useAuth();
+  const favoritesService = useFavorites(user?.id || '');
+
+  // États locaux pour les favoris (synchronisé avec la DB)
+  const [isFavorite, setIsFavorite] = useState(entry.is_favorite || false);
+  const [isProcessingFavorite, setIsProcessingFavorite] = useState(false);
+
+  // États locaux pour les autres fonctionnalités
+  const [bookmarkState, setBookmarkState] = useState<BookmarkState>({
+    isBookmarked: false,
+  });
+  
+  const [scrollState, setScrollState] = useState<ScrollState>({
+    isReading: false,
+    isScrolling: false,
+    showControls: false,
+    speed: 20,
+    progress: 0,
+  });
+  
+  const [uiState, setUiState] = useState<UIState>({
+    textSizeIndex: 2,
+    hasScrollbar: false,
+    hasResume: false,
+  });
+
+  // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
-  const lastPositionKey = `scroll-pos-${entry.book_title}-${entry.id}`;
-  const [isReading, setIsReading] = useState(false);
-  const [isScrolling, setIsScrolling] = useState(false);
-  const [showControls, setShowControls] = useState(false);
-  const [scrollSpeed, setScrollSpeed] = useState(20);
-  const [textSizeIndex, setTextSizeIndex] = useState(2);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [hasScrollbar, setHasScrollbar] = useState(false);
-  const scrollSpeedRef = useRef(scrollSpeed);
+  const scrollSpeedRef = useRef(scrollState.speed);
   const lastTapTimeRef = useRef<number>(0);
   const isTouchActionRef = useRef(false);
+  const animationIdRef = useRef<number | null>(null);
+  const lastTimestampRef = useRef<number | null>(null);
 
+  // Valeurs mémorisées
+  const lastPositionKey = useMemo(() => 
+    `scroll-pos-${entry.book_title}-${entry.id}`, 
+    [entry.book_title, entry.id]
+  );
+
+  const textStyle = useMemo(() => ({
+    fontSize: FONT_SIZES[uiState.textSizeIndex].size,
+    lineHeight: FONT_SIZES[uiState.textSizeIndex].lineHeight,
+  }), [uiState.textSizeIndex]);
+
+  // Synchroniser l'état favori avec la prop entry
   useEffect(() => {
-    scrollSpeedRef.current = scrollSpeed;
-  }, [scrollSpeed]);
+    setIsFavorite(entry.is_favorite || false);
+  }, [entry.is_favorite]);
 
-  // ▶️ Reprendre la position sauvegardée
+  // Vérifier l'état favori au chargement depuis la DB
+  useEffect(() => {
+    const checkFavoriteStatus = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const { data } = await supabase
+          .from('favorites')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('content_id', entry.id.toString())
+          .eq('content_type', 'book_entry')
+          .single();
+
+        const isInFavorites = !!data;
+        setIsFavorite(isInFavorites);
+
+        // Si incohérent avec la DB, mettre à jour
+        if (isInFavorites !== entry.is_favorite) {
+          await supabase
+            .from('book_entries')
+            .update({ is_favorite: isInFavorites })
+            .eq('id', entry.id);
+        }
+      } catch (error) {
+        // Erreur ignorée si pas de favori trouvé
+      }
+    };
+
+    checkFavoriteStatus();
+  }, [user?.id, entry.id, entry.is_favorite]);
+
+  // Mise à jour de la ref de vitesse
+  useEffect(() => {
+    scrollSpeedRef.current = scrollState.speed;
+  }, [scrollState.speed]);
+
+  // Gestion des signets
+  useEffect(() => {
+    const checkBookmark = async () => {
+      try {
+        if (!user?.id) return;
+        
+        const { data } = await supabase
+          .from('bookmarks')
+          .select('*')
+          .eq('category_id', entry.book_title)
+          .eq('user_id', user.id)
+          .maybeSingle();
+          
+        if (data && data.index === entry.ordre) {
+          setBookmarkState({ isBookmarked: true });
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification du signet:', error);
+      }
+    };
+    
+    checkBookmark();
+  }, [entry.book_title, entry.ordre, user?.id]);
+
+  // Restaurer la position sauvegardée
   useEffect(() => {
     const el = scrollRef.current;
     const saved = localStorage.getItem(lastPositionKey);
     if (el && saved) {
       const value = parseFloat(saved);
       el.scrollTop = value;
-      if (value > 0) setHasResume(true);
+      if (value > 0) {
+        setUiState(prev => ({ ...prev, hasResume: true }));
+      }
     }
-  }, [entry.id]);
+  }, [lastPositionKey]);
 
-  // 💾 Sauvegarde automatique en quittant le mode lecture
+  // Sauvegarde automatique
   useEffect(() => {
-    return () => {
+    const savePosition = () => {
       const el = scrollRef.current;
-      if (el) localStorage.setItem(lastPositionKey, el.scrollTop.toString());
+      if (el && el.scrollTop > 0) {
+        localStorage.setItem(lastPositionKey, el.scrollTop.toString());
+      }
     };
-  }, [entry.id]);
+    
+    let saveInterval: NodeJS.Timeout | undefined;
+    if (scrollState.isReading) {
+      saveInterval = setInterval(savePosition, 10000);
+    }
+    
+    return () => {
+      savePosition();
+      if (saveInterval) clearInterval(saveInterval);
+    };
+  }, [scrollState.isReading, lastPositionKey]);
 
+  // Vérification de la barre de défilement améliorée
   useEffect(() => {
-    const checkScroll = () => {
+    const checkScrollbar = () => {
       const el = scrollRef.current;
       if (el) {
         requestAnimationFrame(() => {
           const realScroll = el.scrollHeight - el.clientHeight;
-          setHasScrollbar(realScroll > 10); // marge de sécurité minimale
+          const needsScrollbar = realScroll > 10;
+          
+          // Mettre à jour l'état et les styles CSS
+          setUiState(prev => ({ ...prev, hasScrollbar: needsScrollbar }));
+          
+          // Appliquer directement les styles pour masquer/afficher la scrollbar
+          if (needsScrollbar) {
+            el.style.scrollbarWidth = 'thin';
+            el.style.setProperty('--scrollbar-display', 'block');
+          } else {
+            el.style.scrollbarWidth = 'none';
+            el.style.setProperty('--scrollbar-display', 'none');
+          }
         });
       }
     };
-    checkScroll();
-  }, [entry.content, textSizeIndex]);
+    
+    // Vérifier immédiatement et après un court délai pour le rendu
+    checkScrollbar();
+    const timeoutId = setTimeout(checkScrollbar, 100);
+    
+    if (scrollRef.current && typeof ResizeObserver !== 'undefined') {
+      const resizeObserver = new ResizeObserver(checkScrollbar);
+      resizeObserver.observe(scrollRef.current);
+      return () => {
+        resizeObserver.disconnect();
+        clearTimeout(timeoutId);
+      };
+    } else {
+      return () => clearTimeout(timeoutId);
+    }
+  }, [entry.content, uiState.textSizeIndex]);
 
+  // Animation de défilement
   useEffect(() => {
-    let animationId: number;
-    let lastTimestamp: number | null = null;
-
     const scroll = (currentTime: number) => {
       const el = scrollRef.current;
-      if (!isScrolling || !el) return;
+      if (!scrollState.isScrolling || !el) {
+        animationIdRef.current = null;
+        lastTimestampRef.current = null;
+        return;
+      }
 
       const maxScroll = el.scrollHeight - el.clientHeight;
-
-      if (lastTimestamp !== null) {
-        const elapsed = currentTime - lastTimestamp;
+      
+      if (lastTimestampRef.current !== null) {
+        const elapsed = currentTime - lastTimestampRef.current;
         const pixelsToScroll = (elapsed * scrollSpeedRef.current) / 1000;
 
         el.scrollTop = Math.min(el.scrollTop + pixelsToScroll, maxScroll);
 
         if (maxScroll > 0) {
-          setScrollProgress((el.scrollTop / maxScroll) * 100);
+          setScrollState(prev => ({
+            ...prev,
+            progress: (el.scrollTop / maxScroll) * 100
+          }));
         }
 
         if (el.scrollTop >= maxScroll) {
-          setIsScrolling(false);
+          setScrollState(prev => ({ ...prev, isScrolling: false }));
+          animationIdRef.current = null;
+          lastTimestampRef.current = null;
           return;
         }
       }
-
-      lastTimestamp = currentTime;
-      animationId = requestAnimationFrame(scroll);
+      
+      lastTimestampRef.current = currentTime;
+      animationIdRef.current = requestAnimationFrame(scroll);
     };
 
-    if (isScrolling) {
-      lastTimestamp = null;
-      animationId = requestAnimationFrame(scroll);
+    if (scrollState.isScrolling) {
+      lastTimestampRef.current = null;
+      animationIdRef.current = requestAnimationFrame(scroll);
     }
-    return () => cancelAnimationFrame(animationId);
-  }, [isScrolling]);
+    
+    return () => {
+      if (animationIdRef.current !== null) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+        lastTimestampRef.current = null;
+      }
+    };
+  }, [scrollState.isScrolling]);
 
-  const toggleFavorite = () => setIsFavorite(!isFavorite);
-  const increaseSpeed = () => setScrollSpeed(s => Math.min(100, s + 10));
-  const decreaseSpeed = () => setScrollSpeed(s => Math.max(10, s - 10));
-  const increaseSize = () => setTextSizeIndex(i => Math.min(FONT_SIZES.length - 1, i + 1));
-  const decreaseSize = () => setTextSizeIndex(i => Math.max(0, i - 1));
-  const exitReading = () => { setIsReading(false); setIsScrolling(false); setShowControls(false); };
+  // Vérifier que le service est disponible avant de permettre le clic
+  const isServiceReady = useMemo(() => {
+    return user?.id && favoritesService && typeof favoritesService.toggleBookEntryFavorite === 'function';
+  }, [user?.id, favoritesService]);
 
-  const handleTap = () => {
+  // 🚀 GESTION UNIFIÉE DES FAVORIS avec vérifications
+  const toggleFavorite = useCallback(async () => {
+    if (isProcessingFavorite || !user?.id || !isServiceReady) {
+      console.warn('⚠️ Service non prêt:', { 
+        isProcessingFavorite, 
+        hasUser: !!user?.id, 
+        isServiceReady 
+      });
+      return;
+    }
+    
+    console.log('🔄 Démarrage toggleFavorite pour entry:', entry.id);
+    setIsProcessingFavorite(true);
+    
+    try {
+      // Optimistic update
+      setIsFavorite(prevState => !prevState);
+
+      // Utiliser le nouveau service avec logs
+      console.log('📞 Appel favoritesService.toggleBookEntryFavorite...');
+      const newStatus = await favoritesService.toggleBookEntryFavorite(entry.id.toString());
+      
+      // Assurer la cohérence avec le résultat du service
+      setIsFavorite(newStatus);
+      
+      console.log(`✅ Favori ${newStatus ? 'ajouté' : 'supprimé'} pour l'entrée:`, entry.id);
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la gestion des favoris:', error);
+      // Rollback en cas d'erreur
+      setIsFavorite(prevState => !prevState);
+      alert('Erreur lors de la gestion du favori');
+    } finally {
+      setIsProcessingFavorite(false);
+    }
+  }, [isProcessingFavorite, user?.id, isServiceReady, favoritesService, entry.id]);
+  
+  // Gestion des signets
+  const toggleBookmark = useCallback(async () => {
+    try {
+      if (!user?.id) throw new Error('Utilisateur non connecté');
+      
+      const { data } = await supabase
+        .from('bookmarks')
+        .select('id')
+        .eq('category_id', entry.book_title)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (data) {
+        await supabase
+          .from('bookmarks')
+          .update({ index: entry.ordre })
+          .eq('id', data.id);
+      } else {
+        await supabase
+          .from('bookmarks')
+          .insert({
+            user_id: user.id,
+            category_id: entry.book_title,
+            index: entry.ordre
+          });
+      }
+      
+      setBookmarkState({ isBookmarked: true });
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du signet:', error);
+    }
+  }, [user?.id, entry.book_title, entry.ordre]);
+
+  // Fonctions de contrôle (inchangées)
+  const increaseSpeed = useCallback(() => 
+    setScrollState(prev => ({ ...prev, speed: Math.min(100, prev.speed + 10) })), []);
+  
+  const decreaseSpeed = useCallback(() => 
+    setScrollState(prev => ({ ...prev, speed: Math.max(10, prev.speed - 10) })), []);
+  
+  const increaseSize = useCallback(() => 
+    setUiState(prev => ({ ...prev, textSizeIndex: Math.min(FONT_SIZES.length - 1, prev.textSizeIndex + 1) })), []);
+  
+  const decreaseSize = useCallback(() => 
+    setUiState(prev => ({ ...prev, textSizeIndex: Math.max(0, prev.textSizeIndex - 1) })), []);
+  
+  const exitReading = useCallback(() => {
+    setScrollState(prev => ({
+      ...prev,
+      isReading: false,
+      isScrolling: false,
+      showControls: false
+    }));
+  }, []);
+
+  const handleTap = useCallback(() => {
     const now = Date.now();
     const delta = now - lastTapTimeRef.current;
+    
     if (isTouchActionRef.current) {
       isTouchActionRef.current = false;
       return;
     }
+    
     if (delta < 300) {
-      setIsScrolling(true);
-      setShowControls(false);
+      setScrollState(prev => ({
+        ...prev,
+        isScrolling: true,
+        showControls: false
+      }));
     } else {
-      setIsScrolling(false);
-      setShowControls(true);
+      setScrollState(prev => ({
+        ...prev,
+        isScrolling: false,
+        showControls: true
+      }));
     }
+    
     lastTapTimeRef.current = now;
-  };
+  }, []);
 
-  const textStyle = {
-    fontSize: FONT_SIZES[textSizeIndex].size,
-    lineHeight: FONT_SIZES[textSizeIndex].lineHeight,
-  };
+  const startReading = useCallback(() => {
+    setScrollState(prev => ({
+      ...prev,
+      isReading: true,
+      isScrolling: true
+    }));
+  }, []);
+
+  const toggleScrolling = useCallback(() => {
+    setScrollState(prev => ({
+      ...prev,
+      isScrolling: !prev.isScrolling
+    }));
+  }, []);
 
   return (
     <div className="relative">
-      {!isReading ? (
+      {!scrollState.isReading ? (
         <div className="relative p-6 rounded-xl bg-white shadow max-w-3xl mx-auto">
-          {hasScrollbar && (
-            <button onClick={() => { setIsReading(true); setIsScrolling(true); }}
-              className="absolute top-2 right-4 flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full bg-gray-400/30 hover:bg-gray-400 text-white backdrop-blur-sm shadow-sm">
-              <PlayCircle className="w-4 h-4" /> Lecture
+          {/* 🎯 BOUTON FAVORI FONCTIONNEL - En haut à gauche */}
+          <div className="absolute top-2 left-4">
+            <button
+              onClick={() => {
+                console.log('🖱️ Clic sur cœur FONCTIONNEL');
+                console.log('🔍 État service:', {
+                  hasUser: !!user?.id,
+                  hasService: !!favoritesService,
+                  isServiceReady
+                });
+                toggleFavorite();
+              }}
+              disabled={isProcessingFavorite || !isServiceReady}
+              className={`p-2 rounded-full transition-all duration-200 relative ${
+                isFavorite
+                  ? 'bg-red-100 text-red-600'
+                  : 'bg-gray-100 text-gray-600'
+              } hover:bg-red-200 hover:text-red-700 disabled:opacity-50`}
+              title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+              aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+            >
+              <Heart className="w-5 h-5" fill={isFavorite ? "currentColor" : "none"} />
+              {isProcessingFavorite && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                </div>
+              )}
             </button>
-          )}
-          <div ref={scrollRef} className="max-h-[calc(100vh-12rem)] overflow-y-auto whitespace-pre-wrap font-arabic" dir="rtl">
+          </div>
+
+          {/* Contrôles en haut à droite */}
+          <div className="absolute top-2 right-4 flex gap-2">
+            {uiState.hasScrollbar && (
+              <button 
+                onClick={startReading}
+                className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full bg-gray-400/30 hover:bg-gray-400 text-white backdrop-blur-sm shadow-sm transition-all duration-200"
+                aria-label="Commencer la lecture"
+              >
+                <PlayCircle className="w-4 h-4" /> 
+                <span className="hidden sm:inline">Lecture</span>
+              </button>
+            )}
+            
+            
+          </div>
+          
+          <div 
+            ref={scrollRef} 
+            className={`max-h-[calc(100vh-12rem)] overflow-y-auto whitespace-pre-wrap font-arabic transition-all duration-200 ${
+              uiState.hasScrollbar 
+                ? 'scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400' 
+                : 'scrollbar-none'
+            }`}
+            dir="rtl"
+            style={{
+              // CSS personnalisé pour masquer complètement la scrollbar si pas nécessaire
+              scrollbarWidth: uiState.hasScrollbar ? 'thin' : 'none',
+              msOverflowStyle: uiState.hasScrollbar ? 'auto' : 'none',
+            }}
+          >
             <p className="relative whitespace-pre-wrap font-arabic max-w-3xl mx-auto" style={textStyle}>
-              {hasResume && (
+              {uiState.hasResume && (
                 <span className="absolute -top-4 left-4 text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full shadow-sm animate-pulse z-10">
                   🔄 Reprise auto
                 </span>
-              )}{entry.content}</p>
+              )}
+              {entry.content}
+            </p>
           </div>
         </div>
       ) : (
+        // Mode lecture immersive
         <div className="fixed inset-0 bg-white z-50 flex flex-col">
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-8" onClick={handleTap} dir="rtl">
-            <p className="whitespace-pre-wrap font-arabic max-w-3xl mx-auto" style={textStyle}>{entry.content}</p>
+          <div 
+            ref={scrollRef} 
+            className="flex-1 overflow-y-auto px-6 py-8" 
+            onClick={handleTap} 
+            dir="rtl"
+          >
+            <p className="whitespace-pre-wrap font-arabic max-w-3xl mx-auto" style={textStyle}>
+              {entry.content}
+            </p>
           </div>
 
-          {hasScrollbar && (
+          {uiState.hasScrollbar && (
             <div className="fixed bottom-0 left-0 right-0 h-1 bg-gray-200">
-              <div className="h-full bg-blue-600 transition-all duration-100" style={{ width: `${scrollProgress}%` }} />
+              <div 
+                className="h-full bg-blue-600 transition-all duration-100" 
+                style={{ width: `${scrollState.progress}%` }} 
+              />
             </div>
           )}
 
-          {showControls && (
+          {scrollState.showControls && (
             <>
-              <button onClick={exitReading} className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100">
+              <button 
+                onClick={exitReading} 
+                className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100 transition-all duration-200"
+                aria-label="Fermer le mode lecture"
+              >
                 <X className="w-6 h-6" />
               </button>
 
-              {hasScrollbar && (
+              {uiState.hasScrollbar && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
                   <div className="flex gap-1 px-2 border-r border-gray-200">
-                    <button onClick={decreaseSize} className="p-3 text-gray-600 hover:text-blue-600">
+                    <button 
+                      onClick={decreaseSize} 
+                      className="p-3 text-gray-600 hover:text-blue-600 transition-colors"
+                      aria-label="Diminuer la taille du texte"
+                    >
                       <Minus className="w-5 h-5" />
                     </button>
-                    <span className="px-2 text-sm text-gray-700">{FONT_SIZES[textSizeIndex].name.replace('text-', '')}</span>
-                    <button onClick={increaseSize} className="p-3 text-gray-600 hover:text-blue-600">
+                    <span className="px-2 text-sm text-gray-700 flex items-center min-w-[2rem] justify-center">
+                      {FONT_SIZES[uiState.textSizeIndex].name.replace('text-', '')}
+                    </span>
+                    <button 
+                      onClick={increaseSize} 
+                      className="p-3 text-gray-600 hover:text-blue-600 transition-colors"
+                      aria-label="Augmenter la taille du texte"
+                    >
                       <Plus className="w-5 h-5" />
                     </button>
                   </div>
                   <div className="flex gap-1 px-2 border-r border-gray-200">
-                    <button onClick={decreaseSpeed} className="p-3 text-gray-600 hover:text-blue-600">
+                    <button 
+                      onClick={decreaseSpeed} 
+                      className="p-3 text-gray-600 hover:text-blue-600 transition-colors"
+                      aria-label="Diminuer la vitesse de défilement"
+                    >
                       <Minus className="w-5 h-5" />
                     </button>
-                    <span className="px-2 text-sm text-gray-700">{scrollSpeed}</span>
-                    <button onClick={increaseSpeed} className="p-3 text-gray-600 hover:text-blue-600">
+                    <span className="px-2 text-sm text-gray-700 flex items-center min-w-[2rem] justify-center">
+                      {scrollState.speed}
+                    </span>
+                    <button 
+                      onClick={increaseSpeed} 
+                      className="p-3 text-gray-600 hover:text-blue-600 transition-colors"
+                      aria-label="Augmenter la vitesse de défilement"
+                    >
                       <Plus className="w-5 h-5" />
                     </button>
                   </div>
                   <div className="flex gap-1 px-2">
-                    <button onClick={() => setIsScrolling(!isScrolling)} className="p-3 text-gray-600 hover:text-blue-600">
-                      {isScrolling ? <PauseCircle className="w-6 h-6" /> : <PlayCircle className="w-6 h-6" />}
+                    <button 
+                      onClick={toggleScrolling} 
+                      className="p-3 text-gray-600 hover:text-blue-600 transition-colors"
+                      aria-label={scrollState.isScrolling ? "Mettre en pause" : "Reprendre la lecture"}
+                    >
+                      {scrollState.isScrolling ? <PauseCircle className="w-6 h-6" /> : <PlayCircle className="w-6 h-6" />}
                     </button>
-                    <button onClick={toggleFavorite} className={`p-3 ${isFavorite ? 'text-red-500' : 'text-gray-400'} hover:text-red-500`}>
-                      <Heart className="w-5 h-5" />
-                    </button>
+                    
+                    {/* 🗑️ SUPPRIMÉ - Plus de cœur dans les contrôles */}
                   </div>
                 </div>
               )}

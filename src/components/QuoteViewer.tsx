@@ -1,4 +1,4 @@
-// src/components/QuoteViewer.tsx
+// src/components/QuoteViewer.tsx - Version corrigée
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
@@ -25,9 +25,11 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   onDelete,
 }) => {
   const [bookmarkIndex, setBookmarkIndex] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // Ajout d'un état de chargement
 
+  // Correction: S'assurer que currentIndex est dans les limites valides
   useEffect(() => {
-    if (currentIndex >= quotes.length && quotes.length > 0) {
+    if (quotes.length > 0 && (currentIndex >= quotes.length || currentIndex < 0)) {
       onIndexChange(0);
     }
   }, [quotes, currentIndex, onIndexChange]);
@@ -35,13 +37,23 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   useEffect(() => {
     // Charger l'index du bookmark pour la catégorie sélectionnée
     const fetchBookmark = async () => {
-      const index = await getSavedPageIndex(selectedCategory);
-      setBookmarkIndex(index);
+      setIsLoading(true); // Indiquer le début du chargement
+      try {
+        const index = await getSavedPageIndex(selectedCategory);
+        setBookmarkIndex(index);
+      } catch (error) {
+        console.error("Erreur lors du chargement du signet:", error);
+      } finally {
+        setIsLoading(false); // Chargement terminé, peu importe le résultat
+      }
     };
     fetchBookmark();
   }, [selectedCategory]);
 
   const handleSwipe = (direction: 'left' | 'right') => {
+    // Ne pas effectuer de swipe s'il n'y a pas de citations
+    if (quotes.length === 0) return;
+    
     let newIndex = currentIndex;
     if (direction === 'left') {
       newIndex = currentIndex < quotes.length - 1 ? currentIndex + 1 : 0;
@@ -52,19 +64,26 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   };
 
   const handleNavigateToFirst = () => {
-    onIndexChange(0);
+    if (quotes.length > 0) {
+      onIndexChange(0);
+    }
   };
 
   const handleNavigateToLast = () => {
-    const last = quotes.length - 1;
-    onIndexChange(last);
+    if (quotes.length > 0) {
+      const last = quotes.length - 1;
+      onIndexChange(last);
+    }
   };
 
   const handleManualBookmark = async () => {
+    if (quotes.length === 0) return; // Ne pas créer de signet s'il n'y a pas de citations
+    
     await updateBookmark(selectedCategory, currentIndex);
     setBookmarkIndex(currentIndex); // mise à jour visuelle
   };
 
+  // Si aucune citation n'est disponible
   if (quotes.length === 0) {
     return (
       <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm">
@@ -77,14 +96,38 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     );
   }
 
+  // Si chargement en cours, afficher un indicateur
+  if (isLoading) {
+    return (
+      <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm">
+        <div className="text-gray-500 space-y-2">
+          <div className="w-12 h-12 mx-auto border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+          <p className="text-lg font-medium">Chargement des citations...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Vérifier si l'index actuel est valide
+  const isValidIndex = currentIndex >= 0 && currentIndex < quotes.length;
+  const currentQuote = isValidIndex ? quotes[currentIndex] : null;
+
   return (
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <button onClick={handleNavigateToFirst} className="p-3 rounded-full hover:bg-white/50">
+          <button 
+            onClick={handleNavigateToFirst} 
+            className="p-3 rounded-full hover:bg-white/50"
+            disabled={quotes.length === 0}
+          >
             <ChevronsLeft className="w-6 h-6" />
           </button>
-          <button onClick={() => handleSwipe('right')} className="p-3 rounded-full hover:bg-white/50">
+          <button 
+            onClick={() => handleSwipe('right')} 
+            className="p-3 rounded-full hover:bg-white/50"
+            disabled={quotes.length === 0}
+          >
             <ChevronLeft className="w-6 h-6" />
           </button>
         </div>
@@ -92,10 +135,18 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           {currentIndex + 1} / {quotes.length}
         </span>
         <div className="flex items-center gap-2">
-          <button onClick={() => handleSwipe('left')} className="p-3 rounded-full hover:bg-white/50">
+          <button 
+            onClick={() => handleSwipe('left')} 
+            className="p-3 rounded-full hover:bg-white/50"
+            disabled={quotes.length === 0}
+          >
             <ChevronRight className="w-6 h-6" />
           </button>
-          <button onClick={handleNavigateToLast} className="p-3 rounded-full hover:bg-white/50">
+          <button 
+            onClick={handleNavigateToLast} 
+            className="p-3 rounded-full hover:bg-white/50"
+            disabled={quotes.length === 0}
+          >
             <ChevronsRight className="w-6 h-6" />
           </button>
           <button
@@ -104,19 +155,26 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
               bookmarkIndex === currentIndex ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
             }`}
             title="Enregistrer cette page comme marqueur"
+            disabled={quotes.length === 0}
           >
             <Bookmark className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      <QuoteCard
-        quote={quotes[currentIndex]}
-        onToggleFavorite={onToggleFavorite}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onSwipe={handleSwipe}
-      />
+      {currentQuote ? (
+        <QuoteCard
+          quote={currentQuote}
+          onToggleFavorite={onToggleFavorite}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onSwipe={handleSwipe}
+        />
+      ) : (
+        <div className="p-6 rounded-xl bg-white shadow">
+          <p className="text-center text-gray-500">Citation non disponible ou en cours de chargement</p>
+        </div>
+      )}
     </>
   );
 };

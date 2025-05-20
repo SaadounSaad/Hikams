@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Keyboard, Type, Sun } from 'lucide-react';
 import { FileImport } from './FileImport';
-import { useQuotes } from '../contexts/QuoteContext';
-import { useAppearanceSettings } from '../contexts/AppearanceContext';
+import { useQuotes } from '../context/QuoteContext';
+import { useAppearanceSettings } from '../context/AppearanceContext';
 
 interface SettingsModalProps {
   onClose: () => void;

@@ -1,5 +1,5 @@
-// App.tsx (Partie 1/2) - Version corrigée avec synchronisation robuste
-import { useState, useEffect, useCallback, useMemo } from 'react';
+// App.tsx - Version complète avec toutes les corrections TypeScript
+import { useState, useEffect, useCallback } from 'react';
 import { Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { QuoteProvider, useQuotes } from './context/QuoteContext';
@@ -20,9 +20,23 @@ import MirajArwahPage from './components/MirajArwahPage';
 import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
 import BookReaderPage from './components/BookReaderPage';
 import BookLibraryPage from './components/BookLibraryPage';
+import { getUnifiedFavorites } from './utils/favoritesHelper';
 import { useFavorites, FavoritesService } from './services/FavoritesServices';
 import { supabase } from './lib/supabase';
-import { getUnifiedFavorites, invalidateFavoritesCache, debugFavorites } from './utils/favoritesHelper';
+
+// Interface pour les catégories - alignée avec celle de categories.ts
+interface CategoryItem {
+  id: string;
+  name: string;
+  icon?: string;
+  isDefault?: boolean;
+  parentId?: string;
+  hasSubCategories?: boolean;
+  count?: number;
+}
+
+// Suppression de ExtendedCategory car elle n'est pas utilisée
+// On utilisera directement CategoryItem partout
 
 // Composant App principal qui utilise tous nos contextes
 function AppContent() {
@@ -30,7 +44,6 @@ function AppContent() {
   const { quotes, dailyQuotes, toggleFavorite, deleteQuote, deleteAllQuotes } = useQuotes();
   const { isSepiaMode } = useAppearanceSettings();
   
-  // États de base
   const [selectedCategory, setSelectedCategory] = useState<string>('daily');
   const [currentCategoryFilter, setCurrentCategoryFilter] = useState<string>('');
   const [showForm, setShowForm] = useState(false);
@@ -49,147 +62,58 @@ function AppContent() {
   // États pour les favoris unifiés
   const [unifiedFavorites, setUnifiedFavorites] = useState<Quote[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
-  const [quotesLoading, setQuotesLoading] = useState(false);
-  // Nouvel état pour suivre si une synchronisation est déjà en cours
-  const [isSynchronizing, setIsSynchronizing] = useState(false);
 
-  // Hook pour gérer les favoris avec le service
+  // Hook pour gérer les favoris avec le nouveau service
   const favoritesService = useFavorites(user?.id || '');
 
-  // Obtenir les sous-catégories مختارات et compter
-  const mukhtaratCount = useMemo(() => 
-    quotes.filter(q => categoryManager.isMukhtaratSubCategory(q.category)).length,
-    [quotes]
-  );
+  // Obtenir les sous-catégories مختارات
+  const totalMukhtarat = quotes.filter(q => categoryManager.isMukhtaratSubCategory(q.category)).length;
 
-  // Fonction utilitaire pour exécuter avec retry et timeout
-  const executeWithRetry = useCallback(async (operation, maxRetries = 2, timeoutMs = 10000) => {
-    let retries = 0;
-    
-    // Création du timeout
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error('Opération expirée après ' + timeoutMs + 'ms'));
-      }, timeoutMs);
-    });
-    
-    while (retries <= maxRetries) {
-      try {
-        // Race entre l'opération et le timeout
-        const result = await Promise.race([operation(), timeoutPromise]);
-        clearTimeout(timeoutId);
-        return result;
-      } catch (error) {
-        retries++;
-        clearTimeout(timeoutId);
-        
-        if (retries > maxRetries) {
-          console.error('Échec après plusieurs tentatives:', error);
-          return { error };
-        }
-        
-        // Délai exponentiel: 500ms, 1000ms, 2000ms...
-        const delay = Math.pow(2, retries - 1) * 500;
-        console.log(`Tentative ${retries}/${maxRetries} échouée, nouvelle tentative dans ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }, []);
-
-  // Fonction pour charger les favoris unifiés - avec gestion d'erreur améliorée
+  // Fonction pour charger les favoris unifiés - avec debouncing
   const loadUnifiedFavorites = useCallback(async () => {
     if (!user?.id || favoritesLoading) return;
     
     setFavoritesLoading(true);
     try {
-      // Utiliser executeWithRetry pour les opérations qui pourraient échouer
-      const result = await executeWithRetry(async () => {
-        return await getUnifiedFavorites(user.id);
-      });
-      
-      if (result.error) {
-        throw result.error;
-      }
+      // Charger les favoris unifiés avec le helper existant
+      const favorites = await getUnifiedFavorites(user.id);
       
       // Éviter de mettre à jour si les données n'ont pas changé
       setUnifiedFavorites(prevFavorites => {
-        if (JSON.stringify(prevFavorites) === JSON.stringify(result)) {
+        if (JSON.stringify(prevFavorites) === JSON.stringify(favorites)) {
           return prevFavorites; // Pas de changement, éviter le re-render
         }
-        return result;
+        return favorites;
       });
     } catch (error) {
       console.error('❌ Erreur lors du chargement des favoris:', error);
     } finally {
       setFavoritesLoading(false);
     }
-  }, [user?.id, favoritesLoading, executeWithRetry]);
+  }, [user?.id, favoritesLoading]);
 
-  // Fonction robuste pour synchroniser les favoris au démarrage
-  useEffect(() => {
-  if (!user?.id || isSynchronizing) return;
-  
-  // Exécuté une seule fois au démarrage pour l'utilisateur actuel
-  const initializeFavorites = async () => {
-    console.log('🔄 Initialisation des favoris au démarrage');
-    setIsSynchronizing(true);
-    
-    try {
-      // Synchroniser d'abord les états is_favorite entre les tables
-      await favoritesService.syncFavorites();
-      
-      // Invalider le cache pour forcer un rechargement frais
-      invalidateFavoritesCache();
-      
-      // Charger tous les favoris unifiés
-      const favorites = await getUnifiedFavorites(user.id);
-      console.log(`📊 ${favorites.length} favoris chargés à l'initialisation`);
-      
-      setUnifiedFavorites(favorites);
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'initialisation des favoris:', error);
-    } finally {
-      setIsSynchronizing(false);
-    }
-  };
-  
-  initializeFavorites();
-  
-  // Cet effet ne doit s'exécuter qu'une seule fois au chargement de l'app pour l'utilisateur
-}, [user?.id]);
-
-  // Charger les favoris quand l'utilisateur change - EXÉCUTÉ UNE SEULE FOIS
-  useEffect(() => {
-    // Vérifier si c'est la première fois que l'utilisateur est chargé
+  // Fonction pour synchroniser les favoris au démarrage - adaptée au nouveau service
+  const syncFavoritesOnStart = useCallback(async () => {
     if (user?.id) {
-      let isMounted = true;
-      
-      const initializeApp = async () => {
-        try {
-          // Synchroniser d'abord (une seule fois au démarrage)
-          if (isMounted) {
-            await syncFavoritesOnStart();
-          }
-          
-          // Puis charger les favoris unifiés
-          if (isMounted) {
-            await loadUnifiedFavorites();
-          }
-        } catch (error) {
-          if (isMounted) {
-            console.error('Erreur d\'initialisation:', error);
-          }
-        }
-      };
-      
-      initializeApp();
-      
-      return () => {
-        isMounted = false;
-      };
+      try {
+        // Utiliser les méthodes statiques du service
+        await FavoritesService.syncIsFavoriteFields(user.id);
+        console.log('✅ Synchronisation des favoris terminée');
+      } catch (error) {
+        console.error('❌ Erreur lors de la synchronisation:', error);
+      }
     }
-  }, [user?.id]); // Dépendances réduites pour éviter les exécutions multiples
+  }, [user?.id]);
+
+  // Charger les favoris quand l'utilisateur change
+  useEffect(() => {
+    if (user?.id) {
+      // Synchroniser puis charger les favoris
+      syncFavoritesOnStart().then(() => {
+        loadUnifiedFavorites();
+      });
+    }
+  }, [user?.id]); // ⚠️ Retiré les dépendances qui causent les boucles
 
   // Debug useEffect pour surveiller l'authentification
   useEffect(() => {
@@ -207,16 +131,16 @@ function AppContent() {
     checkAuth();
   }, [user, isAuthenticated, isLoading]);
 
-  // Fonction améliorée pour basculer les favoris - gère quotes ET book_entries
+  // Fonction améliorée pour basculer les favoris - adaptée au nouveau service
   const handleToggleFavorite = useCallback(async (id: string, contentType?: 'quote' | 'book_entry') => {
+    if (!user?.id) {
+      alert('Vous devez être connecté pour ajouter des favoris');
+      return;
+    }
+
     try {
       // Éviter les appels multiples simultanés
-      if (favoritesLoading || isSynchronizing || !user?.id) {
-        if (!user?.id) {
-          alert('Vous devez être connecté pour ajouter des favoris');
-        }
-        return;
-      }
+      if (favoritesLoading) return;
       
       setFavoritesLoading(true);
 
@@ -236,27 +160,15 @@ function AppContent() {
 
       let newStatus: boolean;
       
-      // Utiliser le mécanisme de retry pour les opérations favorites
       if (detectedType === 'quote') {
         // Utiliser le hook (pas besoin de passer userId)
-        const result = await executeWithRetry(async () => {
-          return await favoritesService.toggleQuoteFavorite(id);
-        });
-        
-        if (result.error) throw result.error;
-        newStatus = result;
-        
+        newStatus = await favoritesService.toggleQuoteFavorite(id);
         // Mettre à jour l'ancien système (Context) pour les quotes
         await toggleFavorite(id);
       } else {
         const realId = id.startsWith('book-entry-') ? id.replace('book-entry-', '') : id;
         // Utiliser le hook (pas besoin de passer userId)
-        const result = await executeWithRetry(async () => {
-          return await favoritesService.toggleBookEntryFavorite(realId);
-        });
-        
-        if (result.error) throw result.error;
-        newStatus = result;
+        newStatus = await favoritesService.toggleBookEntryFavorite(realId);
       }
       
       // Recharger les favoris unifiés seulement si on est dans la section favoris
@@ -278,14 +190,12 @@ function AppContent() {
     } finally {
       setFavoritesLoading(false);
     }
-  }, [user?.id, favoritesLoading, isSynchronizing, filteredQuotes, selectedCategory, toggleFavorite, loadUnifiedFavorites, favoritesService, executeWithRetry]);
+  }, [user?.id, favoritesLoading, filteredQuotes, selectedCategory, toggleFavorite, loadUnifiedFavorites, favoritesService]);
 
-  // Fonction spécifique pour supprimer depuis la liste des favoris
+  // Fonction spécifique pour supprimer depuis la liste des favoris - adaptée au nouveau service
   const handleRemoveFromFavorites = useCallback(async (id: string) => {
     try {
-      if (!user?.id || favoritesLoading || isSynchronizing) return;
-      
-      setFavoritesLoading(true);
+      if (!user?.id) return;
 
       const quote = filteredQuotes.find(q => q.id === id);
       if (!quote) return;
@@ -295,22 +205,20 @@ function AppContent() {
         ? quote.originalEntryId.toString() 
         : id.replace('book-entry-', '');
 
-      // Utiliser le mécanisme de retry pour la suppression
-      const result = await executeWithRetry(async () => {
-        return await favoritesService.removeFavorite(realId, contentType);
-      });
-      
-      if (result && result.error) throw result.error;
+      console.log('🗑️ Suppression du favori:', realId, 'Type:', contentType);
+
+      // Utiliser le hook (pas besoin de passer userId)
+      await favoritesService.removeFavorite(realId, contentType);
       
       // Recharger la liste des favoris
       await loadUnifiedFavorites();
+      
+      console.log('✅ Favori supprimé avec succès');
 
     } catch (error) {
       console.error('❌ Erreur lors de la suppression du favori:', error);
-    } finally {
-      setFavoritesLoading(false);
     }
-  }, [user?.id, filteredQuotes, favoritesLoading, isSynchronizing, favoritesService, loadUnifiedFavorites, executeWithRetry]);
+  }, [user?.id, filteredQuotes, favoritesService, loadUnifiedFavorites]);
 
   // Fonction unifiée pour gérer les favoris selon le contexte
   const handleUnifiedToggleFavorite = useCallback(async (id: string) => {
@@ -322,9 +230,6 @@ function AppContent() {
       await handleToggleFavorite(id);
     }
   }, [selectedCategory, handleRemoveFromFavorites, handleToggleFavorite]);
-
-  // SUITE DANS PARTIE 2
-// App.tsx (Partie 2/2) - Suite du composant AppContent
 
   // Charger l'index de bookmark au changement de catégorie
   useEffect(() => {
@@ -340,6 +245,12 @@ function AppContent() {
   // Effet pour fermer le menu lors d'un clic à l'extérieur
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (event instanceof MouseEvent) {
+        console.log("🖱 Événement souris détecté");
+      } else if (event instanceof TouchEvent) {
+        console.log("📱 Événement tactile détecté");
+      }
+    
       if (isMenuOpen && !(event.target as Element)?.closest('nav')) {
         setIsMenuOpen(false);
       }
@@ -397,59 +308,7 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation]);
 
-  // 4. Simplifier l'effet pour filtrer les citations
-// Remplacer l'effet existant par celui-ci :
-
-// Effet simplifié pour filtrer les citations
-  useEffect(() => {
-    // Ne pas exécuter pendant le chargement des favoris
-    if (favoritesLoading) return;
-    
-    console.log(`🔍 Filtrage des citations pour ${selectedCategory}`);
-    let newFilteredQuotes: Quote[] = [];
-
-    if (selectedCategory === 'daily') {
-      newFilteredQuotes = dailyQuotes;
-    } 
-    else if (selectedCategory === 'all') {
-      newFilteredQuotes = currentCategoryFilter 
-        ? quotes.filter(quote => quote.category === currentCategoryFilter)
-        : quotes;
-    } 
-    else if (selectedCategory === 'favorites') {
-      // Utiliser directement les favoris unifiés chargés
-      newFilteredQuotes = unifiedFavorites;
-      console.log(`📊 Utilisation de ${unifiedFavorites.length} favoris unifiés pour l'affichage`);
-    }
-    else if (selectedCategory === 'mukhtarat') {
-      const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
-      newFilteredQuotes = quotes.filter(quote => subCategories.includes(quote.category));
-    }
-    else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
-      newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
-    }
-    else {
-      newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
-    }
-
-    setFilteredQuotes(newFilteredQuotes);
-    
-    // Charger l'index de la dernière page séparément pour éviter les effets de bord
-    getSavedPageIndex(selectedCategory).then(index => {
-      const validIndex = index ?? 0;
-      if (validIndex >= 0 && validIndex < newFilteredQuotes.length) {
-        setCurrentQuoteIndex(validIndex);
-      } else {
-        setCurrentQuoteIndex(0);
-      }
-    }).catch(error => {
-      console.error('Erreur lors du chargement de l\'index:', error);
-      setCurrentQuoteIndex(0);
-    });
-
-  }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes, unifiedFavorites, favoritesLoading]);
-
-  // Effet pour filtrer les citations avec favoris unifiés
+  // Effet pour filtrer les citations avec favoris unifiés - optimisé
   useEffect(() => {
     let isMounted = true; // Éviter les mises à jour si le composant est démonté
     
@@ -507,9 +366,6 @@ function AppContent() {
 
   // Gestionnaire pour la recherche avec favoris unifiés
   const handleSearch = useCallback((results: Quote[]) => {
-    // Commencer par montrer le spinner pour toute recherche
-    setQuotesLoading(true);
-    
     setSearchResults(results);
     if (results.length > 0) {
       setFilteredQuotes(results);
@@ -541,9 +397,6 @@ function AppContent() {
       
       setFilteredQuotes(categoryQuotes);
     }
-    
-    // Terminer le chargement après 300ms pour rendre l'interface plus réactive
-    setTimeout(() => setQuotesLoading(false), 300);
   }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes, unifiedFavorites]);
 
   // Gestionnaire pour le changement de catégorie
@@ -584,7 +437,7 @@ function AppContent() {
         return 'معراج الأرواح';
       default:
         const categories = categoryManager.getCategories();
-        const category = categories.find(c => c.id === categoryId);
+        const category = categories.find((c) => c.id === categoryId);
         return category ? category.name : 'حكم الموردين';
     }
   };
@@ -610,7 +463,7 @@ function AppContent() {
     );
   }
 
-  // Obtenir les sous-catégories مختارات
+  // Obtenir les sous-catégories مختارات avec le bon type
   const mukhtaratSubCategories = categoryManager.getMukhtaratSubCategories();
 
   return (
@@ -634,8 +487,8 @@ function AppContent() {
               <div className="flex items-center">
                 <span className="text-xs font-medium px-2 py-1 rounded-md bg-sky-100 text-sky-600">
                   {selectedCategory === 'mukhtarat' 
-                    ? `${filteredQuotes.length}/${mukhtaratCount}` 
-                    : `${filteredQuotes.length}/${mukhtaratCount}`}
+                    ? `${filteredQuotes.length}/${totalMukhtarat}` 
+                    : `${filteredQuotes.length}/${totalMukhtarat}`}
                 </span>
               </div>
             )}
@@ -643,14 +496,6 @@ function AppContent() {
             {/* Indicateur de chargement pour les favoris */}
             {selectedCategory === 'favorites' && favoritesLoading && (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-600"></div>
-            )}
-            
-            {/* Indicateur de synchronisation en cours */}
-            {isSynchronizing && (
-              <div className="flex items-center gap-2 px-2 py-1 bg-amber-100 text-amber-700 rounded-md text-xs">
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-700"></div>
-                <span>Synchronisation...</span>
-              </div>
             )}
           </div>
         </div>
@@ -674,7 +519,7 @@ function AppContent() {
               مختارات
             </button>
             
-            {mukhtaratSubCategories.map((subCategory) => {
+            {mukhtaratSubCategories.map((subCategory: CategoryItem) => {
               const IconComponent = getIconComponent(subCategory.icon || '');
               return (
                 <button
@@ -725,14 +570,6 @@ function AppContent() {
                   <p>💡 يمكنك إضافة المفضلة من الحكم العادية أو من مكتبة الكتب</p>
                   <p>⌨️ استخدم الرقم "3" للانتقال السريع إلى المفضلة</p>
                 </div>
-              </div>
-            )}
-
-            {/* Indicateur de chargement global */}
-            {quotesLoading && (
-              <div className="fixed inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-40">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-100 border-t-sky-600"></div>
-                <span className="ml-3 text-sky-600 font-medium">Chargement...</span>
               </div>
             )}
 
@@ -815,6 +652,7 @@ function AppContent() {
       {showShortcuts && (
         <ShortcutsModal onClose={() => setShowShortcuts(false)} />
       )}
+
       {(deleteConfirmation || showDeleteAllConfirmation) && (
         <DeleteConfirmationModal
           quoteId={deleteConfirmation}

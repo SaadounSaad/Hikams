@@ -1,7 +1,8 @@
-// QuoteCard.tsx avec gestion tactile améliorée
+// QuoteCard.tsx modifié avec vérification supplémentaire
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { Heart, Share2, Trash2, Edit, PlayCircle, PauseCircle, Plus, Minus, X, Copy } from 'lucide-react';
+import { Heart, Share2, Trash2, Edit, PlayCircle, PauseCircle, Plus, Minus, X, Copy, StickyNote, ChevronDown, ChevronUp } from 'lucide-react';
 import { Quote } from '../types';
+import QuoteNoteEditor from './QuoteNoteEditor';
 
 interface QuoteCardProps {
   quote: Quote;
@@ -21,6 +22,15 @@ const FONT_SIZES = [
 ];
 
 export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavorite, onDelete, onEdit, onSwipe }) => {
+  // CORRECTION: Vérification initiale pour s'assurer que quote est bien défini
+  if (!quote || !quote.text) {
+    return (
+      <div className="relative bg-white rounded-xl shadow transition-all duration-200 p-6">
+        <p className="text-gray-500 text-center">Citation non disponible ou en cours de chargement</p>
+      </div>
+    );
+  }
+
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const [isReading, setIsReading] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
@@ -29,6 +39,11 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
   const [showCopiedMessage, setShowCopiedMessage] = useState(false);
   const [autoScrollProgress, setAutoScrollProgress] = useState(0);
   const [hasScrollbar, setHasScrollbar] = useState(false);
+  
+  // État pour l'affichage des notes
+  const [showNotes, setShowNotes] = useState(false);
+  const [notesCount, setNotesCount] = useState(0);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   
   // Utiliser un état pour l'index de taille de texte
   const [textSizeIndex, setTextSizeIndex] = useState(2); // Commence à 1 = text-2xl
@@ -126,9 +141,6 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
       lastTimestamp = null;
       pixelRemainder = 0;
       animationFrameId = requestAnimationFrame(scroll);
-      
-      // Ne pas montrer les contrôles automatiquement quand on démarre le défilement
-      // showControlsTemporarily();
     }
 
     return () => cancelAnimationFrame(animationFrameId);
@@ -264,6 +276,11 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     onToggleFavorite(quote.id);
   };
 
+  // Fonction pour gérer les mises à jour des notes
+  const handleNotesUpdated = (count: number) => {
+    setNotesCount(count);
+  };
+
   // Style de texte avec taille dynamique
   const textStyle = {
     fontSize: FONT_SIZES[textSizeIndex].size,
@@ -282,7 +299,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                 setIsReading(true);
                 setIsScrolling(true);
               }}
-              className="absolute top-2 right-40 flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full 
+              className="absolute top-2 right-4 flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full 
               bg-gray-400/30 hover:bg-gray-400 text-white backdrop-blur-sm shadow-sm transition-all duration-200"
               aria-label="Mode lecture"
             >
@@ -349,6 +366,36 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
               </span>
             )}
           </div>
+          
+          {/* Nouveau système de notes avec bouton */}
+          {quote.isFavorite && (
+            <div className="mt-4 notes-section">
+              <button 
+                onClick={() => setShowNotes(!showNotes)}
+                className="flex items-center justify-between w-full text-sm font-medium px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                disabled={isLoadingNotes}
+              >
+                <div className="flex items-center gap-2">
+                  <StickyNote className="w-4 h-4" />
+                  <span>Mes notes {notesCount > 0 ? `(${notesCount})` : ''}</span>
+                </div>
+                {isLoadingNotes ? (
+                  <span className="animate-pulse">...</span>
+                ) : (
+                  showNotes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+              
+              {showNotes && (
+                <div className="mt-3 animate-slide-down">
+                  <QuoteNoteEditor 
+                    quoteId={quote.id} 
+                    onNotesUpdated={handleNotesUpdated}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         // Mode lecture immersive
@@ -459,6 +506,29 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                   </button>
                 </div>
               </div>
+              
+              {/* Bouton de notes en mode immersif (si favori) */}
+              {quote.isFavorite && (
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
+                  <button 
+                    onClick={() => setShowNotes(!showNotes)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-md rounded-full shadow-lg text-sm font-medium text-blue-600"
+                  >
+                    <StickyNote className="w-4 h-4" />
+                    <span>Mes notes {notesCount > 0 ? `(${notesCount})` : ''}</span>
+                    {showNotes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  
+                  {showNotes && (
+                    <div className="mt-3 p-3 bg-white/95 backdrop-blur-md rounded-xl shadow-lg max-w-md w-[90vw] max-h-[30vh] overflow-y-auto">
+                      <QuoteNoteEditor 
+                        quoteId={quote.id} 
+                        onNotesUpdated={handleNotesUpdated}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

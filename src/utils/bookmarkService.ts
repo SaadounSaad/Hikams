@@ -1,62 +1,98 @@
-// src/utils/bookmarkService.ts
+// bookmarkService.ts - Service pour gérer les signets
 import { supabase } from '../lib/supabase';
 
-const TABLE_NAME = 'bookmarks';
-
-export async function updateBookmark(categoryId: string, index: number): Promise<void> {
+// Lors de la sauvegarde d'un bookmark, utiliser category_id
+export const updateBookmark = async (bookTitle: string, index: number) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Utilisateur non connecté');
-
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('Erreur d\'authentification:', authError);
+      return;
+    }
+    
+    if (!authData.user) {
+      console.warn('Utilisateur non connecté');
+      return;
+    }
+    
+    // Rechercher un bookmark existant
     const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('category_id', categoryId)
+      .from('bookmarks')
+      .select('*')
+      .eq('category_id', bookTitle) // Utiliser category_id comme indiqué dans votre structure
+      .eq('user_id', authData.user.id)
       .maybeSingle();
-
-    if (error) throw error;
-
+    
+    if (error) {
+      console.error('Erreur lors de la vérification du signet:', error);
+      return;
+    }
+    
     if (data) {
+      // Mise à jour d'un signet existant
       const { error: updateError } = await supabase
-        .from(TABLE_NAME)
-        .update({ index })
-        .eq('id', data.id);
-
-      if (updateError) throw updateError;
-    } else {
-      const { error: insertError } = await supabase
-        .from(TABLE_NAME)
-        .insert({
-          user_id: user.id,
-          category_id: categoryId,
+        .from('bookmarks')
+        .update({ 
           index,
+          updated_at: new Date().toISOString() // Mettre à jour le timestamp
+        })
+        .eq('id', data.id);
+      
+      if (updateError) {
+        console.error('Erreur lors de la mise à jour du signet:', updateError);
+      }
+    } else {
+      // Création d'un nouveau signet
+      const { error: insertError } = await supabase
+        .from('bookmarks')
+        .insert({
+          user_id: authData.user.id,
+          category_id: bookTitle, // Utiliser category_id pour stocker le titre du livre
+          index,
+          createdAt: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
-
-      if (insertError) throw insertError;
+      
+      if (insertError) {
+        console.error('Erreur lors de la création du signet:', insertError);
+      }
     }
   } catch (error) {
-    console.error('Erreur updateBookmark:', error);
+    console.error('Erreur inattendue:', error);
   }
-}
+};
 
-export async function getSavedPageIndex(categoryId: string): Promise<number> {
+// Lors de la récupération d'un bookmark
+export const getSavedPageIndex = async (bookTitle: string): Promise<number | null> => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Utilisateur non connecté');
-
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('Erreur d\'authentification:', authError);
+      return null;
+    }
+    
+    if (!authData.user) {
+      console.warn('Utilisateur non connecté');
+      return null;
+    }
+    
     const { data, error } = await supabase
-      .from(TABLE_NAME)
+      .from('bookmarks')
       .select('index')
-      .eq('user_id', user.id)
-      .eq('category_id', categoryId)
+      .eq('category_id', bookTitle) // Utiliser category_id comme indiqué dans votre structure
+      .eq('user_id', authData.user.id)
       .maybeSingle();
-
-    if (error) throw error;
-
-    return data?.index ?? 0;
+    
+    if (error) {
+      console.error('Erreur lors de la récupération du signet:', error);
+      return null;
+    }
+    
+    return data ? data.index : null;
   } catch (error) {
-    console.error('Erreur getSavedPageIndex:', error);
-    return 0;
+    console.error('Erreur inattendue:', error);
+    return null;
   }
-}
+};

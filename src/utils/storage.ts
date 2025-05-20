@@ -1,6 +1,19 @@
 import { supabase } from '../lib/supabase';
 import { Quote } from '../types';
 
+// Interface pour les notes de citations
+export interface QuoteNote {
+  id: string;
+  quote_id: string;
+  user_id: string;
+  content: string;
+  category: 'réflexion' | 'action' | 'objectif';
+  createdAt: string;
+  updated_at: string;
+  reminder_date?: string;
+  completed: boolean;
+}
+
 class Storage {
   private async ensureConnection() {
     try {
@@ -58,15 +71,15 @@ class Storage {
   
         switch (sortOrder) {
           case 'newest':
-            query = query.order('created_at', { ascending: false });
+            query = query.order('createdAt', { ascending: false });
             break;
           case 'oldest':
-            query = query.order('created_at', { ascending: true });
+            query = query.order('createdAt', { ascending: true });
             break;
           case 'scheduled':
             query = query
               .order('scheduled_date', { ascending: true, nullsLast: true } as any)
-              .order('created_at', { ascending: true });
+              .order('createdAt', { ascending: true });
             break;
         }
   
@@ -84,7 +97,7 @@ class Storage {
         category: quote.category,
         source: quote.source || '',
         isFavorite: quote.is_favorite,
-        createdAt: quote.created_at,
+        createdAt: quote.createdAt,
         scheduledDate: quote.scheduled_date,
       }));
   
@@ -130,8 +143,8 @@ class Storage {
         category: quote.category,
         source: quote.source,
         is_favorite: quote.isFavorite,
-        created_at: quote.createdAt,
-        scheduled_date: quote.scheduledDate,
+        createdAt: quote.createdAt,
+        scheduled_date: quote.scheduled_date,
         user_id: user.id,
       });
 
@@ -158,7 +171,7 @@ class Storage {
           category: quote.category,
           source: quote.source,
           is_favorite: quote.isFavorite,
-          scheduled_date: quote.scheduledDate,
+          scheduled_date: quote.scheduled_date,
         })
         .eq('id', quote.id)
         .eq('user_id', user.id);
@@ -263,17 +276,171 @@ class Storage {
 
       if (error) throw error;
 
+      // Dans storage.ts, méthode getDailyQuotes()
       return data.map(quote => ({
         id: quote.id,
         text: quote.text,
         category: quote.category,
         source: quote.source || '',
-        isFavorite: quote.is_favorite,
-        createdAt: quote.created_at,
+        isFavorite: quote.is_favorite, // Vérifiez que cette ligne existe et est correcte
+        createdAt: quote.createdAt,
         scheduledDate: quote.scheduled_date,
       }));
     } catch (error) {
       console.error('Error fetching daily quotes:', error);
+      return [];
+    }
+  }
+  async getQuoteNotes(quoteId: string): Promise<QuoteNote[]> {
+    try {
+      await this.ensureConnection();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('quote_notes')
+        .select('*')
+        .eq('quote_id', quoteId)
+        .eq('user_id', user.id)
+        .order('createdAt', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching quote notes:', error);
+        return [];
+      }
+      
+      return data as QuoteNote[];
+    } catch (error) {
+      console.error('Error fetching quote notes:', error);
+      return [];
+    }
+  }
+  
+  async saveQuoteNote(note: Omit<QuoteNote, 'id' | 'createdAt' | 'updated_at' | 'user_id'>): Promise<QuoteNote> {
+    try {
+      await this.ensureConnection();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const now = new Date().toISOString();
+      
+      const { data, error } = await supabase
+        .from('quote_notes')
+        .insert({
+          ...note,
+          user_id: user.id,
+          createdAt: now,
+          updated_at: now,
+        })
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error saving quote note:', error);
+        throw new Error('Erreur lors de la sauvegarde de la note');
+      }
+      
+      return data as QuoteNote;
+    } catch (error) {
+      console.error('Error saving quote note:', error);
+      throw error;
+    }
+  }
+  
+  async updateQuoteNote(noteId: string, updates: Partial<Omit<QuoteNote, 'id' | 'quote_id' | 'user_id' | 'createdAt'>>): Promise<QuoteNote> {
+    try {
+      await this.ensureConnection();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('quote_notes')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', noteId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error updating quote note:', error);
+        throw new Error('Erreur lors de la mise à jour de la note');
+      }
+      
+      return data as QuoteNote;
+    } catch (error) {
+      console.error('Error updating quote note:', error);
+      throw error;
+    }
+  }
+  
+  async deleteQuoteNote(noteId: string): Promise<void> {
+    try {
+      await this.ensureConnection();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('quote_notes')
+        .delete()
+        .eq('id', noteId)
+        .eq('user_id', user.id);
+        
+      if (error) {
+        console.error('Error deleting quote note:', error);
+        throw new Error('Erreur lors de la suppression de la note');
+      }
+    } catch (error) {
+      console.error('Error deleting quote note:', error);
+      throw error;
+    }
+  }
+  
+  async getDueNoteReminders(): Promise<(QuoteNote & { quote?: Quote })[]> {
+    try {
+      await this.ensureConnection();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      // Obtenir la date du jour à minuit dans le fuseau horaire local
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      // Ajuster pour le fuseau horaire UTC
+      const todayUTC = new Date(today.getTime() - (today.getTimezoneOffset() * 60000));
+
+      const { data, error } = await supabase
+        .from('quote_notes')
+        .select(`
+          *,
+          quotes:quote_id (id, text, category, source)
+        `)
+        .eq('user_id', user.id)
+        .eq('completed', false)
+        .lte('reminder_date', todayUTC.toISOString())
+        .order('reminder_date', { ascending: true });
+        
+      if (error) {
+        console.error('Error fetching due reminders:', error);
+        return [];
+      }
+      
+      return data.map(item => ({
+        ...item,
+        quote: item.quotes ? {
+          id: item.quotes.id,
+          text: item.quotes.text,
+          category: item.quotes.category,
+          source: item.quotes.source || '',
+          isFavorite: true, // Cette valeur n'est pas utilisée directement depuis les reminders
+          createdAt: '', // Cette valeur n'est pas utilisée directement depuis les reminders
+          scheduledDate: '', // Cette valeur n'est pas utilisée directement depuis les reminders
+        } : undefined
+      }));
+    } catch (error) {
+      console.error('Error fetching due reminders:', error);
       return [];
     }
   }
