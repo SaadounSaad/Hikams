@@ -5,14 +5,16 @@ import { useFavorites } from '../services/FavoritesServices'; // ← Utiliser le
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext'; // ← Ajouter pour obtenir user
 
+
 interface BookEntryCardProps {
   entry: {
     id: number;
     content: string;
     ordre: number;
     book_title: string;
-    is_favorite?: boolean; // ← Ajouter cette propriété
+    is_favorite?: boolean;
   };
+  onFavoriteChange?: () => void; // ✅ nouveau
 }
 
 const FONT_SIZES = [
@@ -40,8 +42,7 @@ interface UIState {
 interface BookmarkState {
   isBookmarked: boolean;
 }
-
-const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
+const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry, onFavoriteChange }) => {
   // 🔥 NOUVEAU SERVICE UNIFIÉ
   const { user } = useAuth();
   const favoritesService = useFavorites(user?.id || '');
@@ -286,39 +287,39 @@ const BookEntryCard: React.FC<BookEntryCardProps> = ({ entry }) => {
   // 🚀 GESTION UNIFIÉE DES FAVORIS avec vérifications
   const toggleFavorite = useCallback(async () => {
     if (isProcessingFavorite || !user?.id || !isServiceReady) {
-      console.warn('⚠️ Service non prêt:', { 
-        isProcessingFavorite, 
-        hasUser: !!user?.id, 
-        isServiceReady 
+      console.warn('⚠️ Service non prêt:', {
+        isProcessingFavorite,
+        hasUser: !!user?.id,
+        isServiceReady
       });
       return;
     }
-    
+
     console.log('🔄 Démarrage toggleFavorite pour entry:', entry.id);
     setIsProcessingFavorite(true);
-    
+
     try {
-      // Optimistic update
       setIsFavorite(prevState => !prevState);
 
-      // Utiliser le nouveau service avec logs
       console.log('📞 Appel favoritesService.toggleBookEntryFavorite...');
       const newStatus = await favoritesService.toggleBookEntryFavorite(entry.id.toString());
-      
-      // Assurer la cohérence avec le résultat du service
       setIsFavorite(newStatus);
-      
+
       console.log(`✅ Favori ${newStatus ? 'ajouté' : 'supprimé'} pour l'entrée:`, entry.id);
-      
+
+      // ✅ Notifier le parent si présent
+      if (typeof onFavoriteChange === 'function') {
+        onFavoriteChange();
+      }
+
     } catch (error) {
       console.error('❌ Erreur lors de la gestion des favoris:', error);
-      // Rollback en cas d'erreur
       setIsFavorite(prevState => !prevState);
       alert('Erreur lors de la gestion du favori');
     } finally {
       setIsProcessingFavorite(false);
     }
-  }, [isProcessingFavorite, user?.id, isServiceReady, favoritesService, entry.id]);
+  }, [isProcessingFavorite, user?.id, isServiceReady, favoritesService, entry.id, onFavoriteChange]);
   
   // Gestion des signets
   const toggleBookmark = useCallback(async () => {

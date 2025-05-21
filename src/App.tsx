@@ -209,76 +209,72 @@ function AppContent() {
 
   // Fonction améliorée pour basculer les favoris - gère quotes ET book_entries
   const handleToggleFavorite = useCallback(async (id: string, contentType?: 'quote' | 'book_entry') => {
-    try {
-      // Éviter les appels multiples simultanés
-      if (favoritesLoading || isSynchronizing || !user?.id) {
-        if (!user?.id) {
-          alert('Vous devez être connecté pour ajouter des favoris');
-        }
-        return;
+  try {
+    if (favoritesLoading || isSynchronizing || !user?.id) {
+      if (!user?.id) {
+        alert('Vous devez être connecté pour ajouter des favoris');
       }
-      
-      setFavoritesLoading(true);
-
-      // Détecter automatiquement le type si non spécifié
-      let detectedType = contentType;
-      if (!detectedType) {
-        const quote = filteredQuotes.find(q => q.id === id);
-        if (quote) {
-          detectedType = quote.isBookEntry ? 'book_entry' : 'quote';
-        }
-      }
-
-      if (!detectedType) {
-        console.error('❌ Impossible de déterminer le type de contenu pour:', id);
-        return;
-      }
-
-      let newStatus: boolean;
-      
-      // Utiliser le mécanisme de retry pour les opérations favorites
-      if (detectedType === 'quote') {
-        // Utiliser le hook (pas besoin de passer userId)
-        const result = await executeWithRetry(async () => {
-          return await favoritesService.toggleQuoteFavorite(id);
-        });
-        
-        if (result.error) throw result.error;
-        newStatus = result;
-        
-        // Mettre à jour l'ancien système (Context) pour les quotes
-        await toggleFavorite(id);
-      } else {
-        const realId = id.startsWith('book-entry-') ? id.replace('book-entry-', '') : id;
-        // Utiliser le hook (pas besoin de passer userId)
-        const result = await executeWithRetry(async () => {
-          return await favoritesService.toggleBookEntryFavorite(realId);
-        });
-        
-        if (result.error) throw result.error;
-        newStatus = result;
-      }
-      
-      // Recharger les favoris unifiés seulement si on est dans la section favoris
-      if (selectedCategory === 'favorites') {
-        await loadUnifiedFavorites();
-      }
-
-      // Mettre à jour le bookmark pour la quote actuelle
-      if (detectedType === 'quote' && newStatus) {
-        const quoteIndex = filteredQuotes.findIndex(q => q.id === id);
-        if (quoteIndex !== -1) {
-          await updateBookmark(selectedCategory, quoteIndex);
-        }
-      }
-
-    } catch (error) {
-      console.error('❌ Erreur lors du basculement du favori:', error);
-      alert('Erreur lors de l\'ajout aux favoris. Vérifiez votre connexion.');
-    } finally {
-      setFavoritesLoading(false);
+      return;
     }
-  }, [user?.id, favoritesLoading, isSynchronizing, filteredQuotes, selectedCategory, toggleFavorite, loadUnifiedFavorites, favoritesService, executeWithRetry]);
+
+    setFavoritesLoading(true);
+
+    let detectedType = contentType;
+    if (!detectedType) {
+      const quote = filteredQuotes.find(q => q.id === id);
+      if (quote) {
+        detectedType = quote.isBookEntry ? 'book_entry' : 'quote';
+      }
+    }
+
+    if (!detectedType) {
+      console.error('❌ Impossible de déterminer le type de contenu pour:', id);
+      return;
+    }
+
+    let newStatus: boolean;
+
+    if (detectedType === 'quote') {
+      const result = await executeWithRetry(() => favoritesService.toggleQuoteFavorite(id));
+      if (result.error) throw result.error;
+      newStatus = result;
+
+      await toggleFavorite(id); // Mise à jour du contexte local
+    } else {
+      const realId = id.startsWith('book-entry-') ? id.replace('book-entry-', '') : id;
+      const result = await executeWithRetry(() => favoritesService.toggleBookEntryFavorite(realId));
+      if (result.error) throw result.error;
+      newStatus = result;
+    }
+
+    // ✅ Toujours recharger les favoris unifiés, même hors section "favorites"
+    await loadUnifiedFavorites();
+
+    // Mettre à jour le bookmark si nécessaire
+    if (detectedType === 'quote' && newStatus) {
+      const quoteIndex = filteredQuotes.findIndex(q => q.id === id);
+      if (quoteIndex !== -1) {
+        await updateBookmark(selectedCategory, quoteIndex);
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Erreur lors du basculement du favori:', error);
+    alert('Erreur lors de l\'ajout aux favoris. Vérifiez votre connexion.');
+  } finally {
+    setFavoritesLoading(false);
+  }
+}, [
+  user?.id,
+  favoritesLoading,
+  isSynchronizing,
+  filteredQuotes,
+  selectedCategory,
+  toggleFavorite,
+  loadUnifiedFavorites,
+  favoritesService,
+  executeWithRetry
+]);
 
   // Fonction spécifique pour supprimer depuis la liste des favoris
   const handleRemoveFromFavorites = useCallback(async (id: string) => {
