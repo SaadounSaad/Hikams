@@ -1,14 +1,9 @@
-// Sidebar.tsx - Modifié pour gérer la nouvelle sous-navigation
+// Sidebar.tsx - Version originale avec sous-menu مختارات intégré
 import React, { useState } from 'react';
-import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star } from 'lucide-react';
-import { categoryManager } from '../utils/categories';
+import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star, BookOpen, ChevronRight } from 'lucide-react';
+import { categoryManager, getIconComponent } from '../utils/categories';
 import { useAuth } from '../context/AuthContext';
-// Ajoutez cette interface au début du fichier
-interface SubCategory {
-  id: string;
-  name: string;
-  parentId: string;
-}
+
 interface SidebarProps {
   selectedCategory: string;
   currentCategoryFilter: string;
@@ -28,36 +23,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { logout } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  const [isMukhtaratExpanded, setIsMukhtaratExpanded] = useState(
+    selectedCategory === 'mukhtarat' || categoryManager.isMukhtaratSubCategory(selectedCategory)
+  );
   
   // Recherche
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // Implémentation future de la recherche
     console.log("Recherche pour:", searchTerm);
     setSearchTerm('');
   };
 
+  // Obtenir les sous-catégories مختارات
+  const mukhtaratSubCategories = categoryManager.getMukhtaratSubCategories();
+
+  // Fonction pour basculer l'expansion de مختارات
+  const toggleMukhtarat = () => {
+    setIsMukhtaratExpanded(!isMukhtaratExpanded);
+    if (!isMukhtaratExpanded) {
+      onCategoryChange('mukhtarat');
+    }
+  };
+
   // Catégories principales
   const mainCategories = [
-    { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" />, isDefault: true, hasSubCategories: true },
-    { id: 'separator1', type: 'separator' },
+    { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" /> },
     { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'مختارات', isDefault: true, hasSubCategories: true },
-
-    
-    {
-      id: 'book-library',
-      name: '📚  الرقائق',
-      isDefault: false,
-      hasSubCategories: false
-    } , 
-  { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
+    { id: 'book-library', name: '📚 الرقائق', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
   ];
-  
-  const mirajSubCategories: SubCategory[] = [
 
-    // Ajoutez les autres boutons comme sous-catégories
-  ];
   return (
     <>
       {/* Overlay pour mobile */}
@@ -93,55 +88,72 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Catégories principales */}
           <div className="space-y-1">
             {mainCategories.map((category) => (
-              <div key={category.id}>
-                <button
-                  onClick={() => onCategoryChange(category.id)}
-                  className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
-                    (selectedCategory === category.id || 
-                    (category.id === 'mukhtarat' && categoryManager.isMukhtaratSubCategory(selectedCategory)))
-                      ? 'bg-sky-50 text-sky-600'
-                      : 'hover:bg-gray-50 text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 font-arabic">
-                    <div className="text-gray-500">{category.icon}</div>
-                    <span>{category.name}</span>
-                  </div>
-                  {category.count && (
-                    <span 
-                      className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
-                        selectedCategory === category.id || 
-                        (category.id === 'mukhtarat' && categoryManager.isMukhtaratSubCategory(selectedCategory))
-                          ? 'bg-sky-100 text-sky-600'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {category.count}
-                    </span>
-                  )}
-                </button>
-              </div>
+              <button
+                key={category.id}
+                onClick={() => onCategoryChange(category.id)}
+                className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
+                  selectedCategory === category.id
+                    ? 'bg-sky-50 text-sky-600'
+                    : 'hover:bg-gray-50 text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-3 font-arabic">
+                  <div className="text-gray-500">{category.icon}</div>
+                  <span>{category.name}</span>
+                </div>
+              </button>
             ))}
+
+            {/* Catégorie مختارات avec sous-menu */}
+            <div className="space-y-1">
+              <button
+                onClick={toggleMukhtarat}
+                className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
+                  selectedCategory === 'mukhtarat' || categoryManager.isMukhtaratSubCategory(selectedCategory)
+                    ? 'bg-sky-50 text-sky-600'
+                    : 'hover:bg-gray-50 text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-3 font-arabic">
+                  <div className="text-gray-500">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <span>مختارات</span>
+                </div>
+                <div className={`transition-transform duration-200 ${
+                  isMukhtaratExpanded ? 'rotate-90' : ''
+                }`}>
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </button>
+
+              {/* Sous-menu مختارات */}
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                isMukhtaratExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+              }`}>
+                <div className="ml-6 border-l-2 border-gray-200 pl-4 py-2 space-y-1">
+                  {mukhtaratSubCategories.map((subCategory) => {
+                    const IconComponent = getIconComponent(subCategory.icon || '');
+                    return (
+                      <button
+                        key={subCategory.id}
+                        onClick={() => onCategoryChange(subCategory.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm font-arabic ${
+                          selectedCategory === subCategory.id
+                            ? 'bg-sky-100 text-sky-700'
+                            : 'hover:bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        <IconComponent className="w-4 h-4" />
+                        <span>{subCategory.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
-    
-    {/* Sous-catégories pour معراج الأرواح */}
-    {selectedCategory === 'miraj-arwah' && (
-      <div className="mt-2 ml-4 space-y-1 border-l border-gray-200 pl-2">
-        {mirajSubCategories.map((subCategory) => (
-          <button
-            key={subCategory.id}
-            onClick={() => onCategoryChange(subCategory.id)}
-            className={`w-full flex items-center py-1.5 px-3 rounded-lg transition-colors text-right ${
-              selectedCategory === subCategory.id
-                ? 'bg-sky-50 text-sky-600'
-                : 'hover:bg-gray-50 text-gray-700'
-            }`}
-          >
-            <span className="font-arabic">{subCategory.name}</span>
-          </button>
-        ))}
-      </div>
-    )}
+
           {/* Tri */}
           <div className="mt-6">
             <div className="border-t border-gray-200 pt-4">

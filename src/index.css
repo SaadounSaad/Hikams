@@ -188,3 +188,821 @@ html {
 button, input, select, textarea {
   font-size: calc(1rem * var(--app-font-size-factor, 100%) / 100);
 }
+
+/* Styles supplémentaires pour le menu latéral - à ajouter à index.css */
+
+/* Animation pour le menu latéral */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+/* Classes pour les animations de la sidebar */
+.sidebar-enter {
+  animation: slideInLeft 0.3s ease-out forwards;
+}
+
+.sidebar-exit {
+  animation: slideOutLeft 0.3s ease-out forwards;
+}
+
+/* Amélioration de la scrollbar pour la sidebar */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 2px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.7);
+}
+
+/* Styles pour les boutons de navigation actifs */
+.nav-button-active {
+  position: relative;
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  border: 1px solid #bae6fd;
+  box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+}
+
+.nav-button-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: linear-gradient(180deg, #0ea5e9, #0284c7);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Effet hover amélioré pour les boutons */
+.nav-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-button:hover {
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Style pour le header de la sidebar */
+.sidebar-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Animation pour les icônes */
+.nav-icon {
+  transition: transform 0.2s ease;
+}
+
+.nav-button:hover .nav-icon {
+  transform: scale(1.1);
+}
+
+/* Styles responsive améliorés */
+@media (max-width: 768px) {
+  .sidebar-mobile {
+    width: 85vw;
+    max-width: 320px;
+  }
+}
+
+/* Style pour le footer de la sidebar */
+.sidebar-footer {
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Amélioration de l'accessibilité */
+.nav-button:focus {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+/* Style pour les séparateurs de section */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  margin: 1rem 0;
+}
+
+/* Animation pour le texte qui apparaît */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-text {
+  animation: fadeInUp 0.3s ease-out 0.1s both;
+}
+
+/* Style pour les badges/compteurs */
+.nav-badge {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+}
+
+/* Amélioration du contraste en mode sombre */
+@media (prefers-color-scheme: dark) {
+  .sidebar-dark {
+    background: rgba(17, 24, 39, 0.95);
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .nav-button-dark {
+    color: #f3f4f6;
+  }
+  
+  .nav-button-dark:hover {
+    background: rgba(55, 65, 81, 0.5);
+  }
+}
+
+/* Style pour le logo/titre */
+.sidebar-logo {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.125rem;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+/* Animation de chargement pour la sidebar */
+.sidebar-loading {
+  background: linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+/* Styles supplémentaires pour le menu latéral avec sous-menu intégré */
+
+/* Animation pour le menu latéral */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+/* Animation pour l'expansion du sous-menu */
+@keyframes expandSubMenu {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    max-height: 400px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes collapseSubMenu {
+  from {
+    max-height: 400px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* Classes pour les animations de la sidebar */
+.sidebar-enter {
+  animation: slideInLeft 0.3s ease-out forwards;
+}
+
+.sidebar-exit {
+  animation: slideOutLeft 0.3s ease-out forwards;
+}
+
+/* Animation pour les sous-menus */
+.submenu-expand {
+  animation: expandSubMenu 0.3s ease-out forwards;
+}
+
+.submenu-collapse {
+  animation: collapseSubMenu 0.3s ease-out forwards;
+}
+
+/* Amélioration de la scrollbar pour la sidebar */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 2px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.7);
+}
+
+/* Styles pour les boutons de navigation actifs */
+.nav-button-active {
+  position: relative;
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  border: 1px solid #bae6fd;
+  box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+}
+
+.nav-button-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: linear-gradient(180deg, #0ea5e9, #0284c7);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Effet hover amélioré pour les boutons */
+.nav-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-button:hover {
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Styles spécifiques pour les sous-menus */
+.submenu-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.submenu-border {
+  border-left: 2px solid #e5e7eb;
+  position: relative;
+}
+
+.submenu-border::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, #0ea5e9, transparent);
+  opacity: 0.3;
+}
+
+/* Style pour les éléments de sous-menu */
+.submenu-item {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.submenu-item:hover {
+  transform: translateX(4px);
+}
+
+.submenu-item-active {
+  background: linear-gradient(135deg, #dbeafe, #eff6ff);
+  border: 1px solid #93c5fd;
+}
+
+.submenu-item-active::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 16px;
+  background: #0ea5e9;
+  border-radius: 3px;
+}
+
+/* Animation pour les icônes */
+.nav-icon {
+  transition: transform 0.2s ease;
+}
+
+.nav-button:hover .nav-icon {
+  transform: scale(1.1);
+}
+
+/* Animation pour les chevrons */
+.chevron-rotate {
+  transition: transform 0.2s ease-in-out;
+}
+
+/* Style pour le header de la sidebar */
+.sidebar-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Styles responsive améliorés */
+@media (max-width: 768px) {
+  .sidebar-mobile {
+    width: 85vw;
+    max-width: 320px;
+  }
+  
+  /* Ajustements pour les sous-menus sur mobile */
+  .submenu-container {
+    margin-left: 0;
+  }
+  
+  .submenu-border {
+    margin-left: 12px;
+    padding-left: 12px;
+  }
+}
+
+/* Style pour le footer de la sidebar */
+.sidebar-footer {
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Amélioration de l'accessibilité */
+.nav-button:focus,
+.submenu-item:focus {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+/* Style pour les séparateurs de section */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  margin: 1rem 0;
+}
+
+/* Animation pour le texte qui apparaît */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-text {
+  animation: fadeInUp 0.3s ease-out 0.1s both;
+}
+
+/* Style pour les badges/compteurs */
+.nav-badge {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+}
+
+/* Animation pour l'indicateur actif */
+@keyframes slideInRight {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.active-indicator {
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* Amélioration du contraste en mode sombre */
+@media (prefers-color-scheme: dark) {
+  .sidebar-dark {
+    background: rgba(17, 24, 39, 0.95);
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .nav-button-dark {
+    color: #f3f4f6;
+  }
+  
+  .nav-button-dark:hover {
+    background: rgba(55, 65, 81, 0.5);
+  }
+  
+  .submenu-border {
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+}
+
+/* Style pour le logo/titre */
+.sidebar-logo {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.125rem;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+/* Animation de chargement pour la sidebar */
+.sidebar-loading {
+  background: linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Effet de profondeur pour les sous-menus */
+.submenu-depth {
+  box-shadow: inset 2px 0 4px rgba(0, 0, 0, 0.05);
+  background: linear-gradient(90deg, rgba(248, 250, 252, 0.8), transparent);
+}
+
+/* Animation pour les éléments qui apparaissent */
+@keyframes fadeInSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.submenu-item {
+  animation: fadeInSlideUp 0.3s ease-out;
+}
+
+.submenu-item:nth-child(1) { animation-delay: 0.1s; }
+.submenu-item:nth-child(2) { animation-delay: 0.15s; }
+.submenu-item:nth-child(3) { animation-delay: 0.2s; }
+.submenu-item:nth-child(4) { animation-delay: 0.25s; }
+
+/* Style pour l'état loading des sous-menus */
+.submenu-loading {
+  background: linear-gradient(90deg, #f8fafc, #f1f5f9, #f8fafc);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+  height: 36px;
+}
+
+/* Effet de survol amélioré pour les sous-menus */
+.submenu-item:hover {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.1);
+}
+
+/* Style pour les tooltips (si nécessaire) */
+.nav-tooltip {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 12px;
+  padding: 6px 12px;
+  background: rgba(17, 24, 39, 0.9);
+  color: white;
+  font-size: 0.875rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 100;
+}
+
+.nav-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 4px solid transparent;
+  border-right-color: rgba(17, 24, 39, 0.9);
+}
+
+.nav-button:hover .nav-tooltip {
+  opacity: 1;
+}/* Styles supplémentaires pour le menu latéral - à ajouter à index.css */
+
+/* Animation pour le menu latéral */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+/* Classes pour les animations de la sidebar */
+.sidebar-enter {
+  animation: slideInLeft 0.3s ease-out forwards;
+}
+
+.sidebar-exit {
+  animation: slideOutLeft 0.3s ease-out forwards;
+}
+
+/* Amélioration de la scrollbar pour la sidebar */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 2px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.7);
+}
+
+/* Styles pour les boutons de navigation actifs */
+.nav-button-active {
+  position: relative;
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  border: 1px solid #bae6fd;
+  box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+}
+
+.nav-button-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: linear-gradient(180deg, #0ea5e9, #0284c7);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Effet hover amélioré pour les boutons */
+.nav-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-button:hover {
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Style pour le header de la sidebar */
+.sidebar-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Animation pour les icônes */
+.nav-icon {
+  transition: transform 0.2s ease;
+}
+
+.nav-button:hover .nav-icon {
+  transform: scale(1.1);
+}
+
+/* Styles responsive améliorés */
+@media (max-width: 768px) {
+  .sidebar-mobile {
+    width: 85vw;
+    max-width: 320px;
+  }
+}
+
+/* Style pour le footer de la sidebar */
+.sidebar-footer {
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Amélioration de l'accessibilité */
+.nav-button:focus {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+/* Style pour les séparateurs de section */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  margin: 1rem 0;
+}
+
+/* Animation pour le texte qui apparaît */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-text {
+  animation: fadeInUp 0.3s ease-out 0.1s both;
+}
+
+/* Style pour les badges/compteurs */
+.nav-badge {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+}
+
+/* Amélioration du contraste en mode sombre */
+@media (prefers-color-scheme: dark) {
+  .sidebar-dark {
+    background: rgba(17, 24, 39, 0.95);
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+  
+  .nav-button-dark {
+    color: #f3f4f6;
+  }
+  
+  .nav-button-dark:hover {
+    background: rgba(55, 65, 81, 0.5);
+  }
+}
+
+/* Style pour le logo/titre */
+.sidebar-logo {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.125rem;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+/* Animation de chargement pour la sidebar */
+.sidebar-loading {
+  background: linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
