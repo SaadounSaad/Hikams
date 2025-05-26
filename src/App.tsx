@@ -1,4 +1,4 @@
-// App.tsx - Version avec menu latéral permanent
+// App.tsx - Version avec menu latéral permanent et support مختارات dynamique
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -92,6 +92,13 @@ function AppContent() {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
+  }, []);
+
+  // Fonction pour gérer la sélection depuis MukhtaratPage
+  const handleMukhtaratCategorySelect = useCallback((bookName: string) => {
+    setSelectedCategory(bookName);
+    setCurrentCategoryFilter('');
+    setShowMukhtaratPage(false);
   }, []);
 
   // Fonction pour charger les favoris unifiés
@@ -330,7 +337,7 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation]);
 
-  // Effet pour filtrer les citations
+  // Effet pour filtrer les citations (modifié pour supporter book_name)
   useEffect(() => {
     if (favoritesLoading) return;
     
@@ -350,14 +357,19 @@ function AppContent() {
       console.log(`📊 Utilisation de ${unifiedFavorites.length} favoris unifiés pour l'affichage`);
     }
     else if (selectedCategory === 'mukhtarat') {
-      const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
-      newFilteredQuotes = quotes.filter(quote => subCategories.includes(quote.category));
+      // Ne pas filtrer ici, juste afficher la page
+      newFilteredQuotes = [];
     }
     else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
+      // Ancienne logique pour les sous-catégories fixes
       newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
     }
     else {
-      newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
+      // Nouvelle logique : filtrer par book_name ou category
+      newFilteredQuotes = quotes.filter(quote => 
+        quote.category === selectedCategory || 
+        quote.book_name === selectedCategory // Ajout du filtrage par book_name
+      );
     }
 
     setFilteredQuotes(newFilteredQuotes);
@@ -574,7 +586,10 @@ function AppContent() {
 
               {/* Contenu selon la catégorie sélectionnée */}
               {showMukhtaratPage ? (
-                <MukhtaratPage onClose={() => setShowMukhtaratPage(false)} />
+                <MukhtaratPage 
+                  onClose={() => setShowMukhtaratPage(false)}
+                  onSelectCategory={handleMukhtaratCategorySelect}
+                />
               ) : selectedCategory === 'miraj-arwah' ? (
                 mirajSubcategory ? (
                   mirajSubcategory === 'wird' ? (

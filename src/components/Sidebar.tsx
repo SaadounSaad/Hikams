@@ -1,7 +1,6 @@
-// Sidebar.tsx - Version originale avec sous-menu مختارات intégré
+// Sidebar.tsx - Version simplifiée sans sous-menu مختارات
 import React, { useState } from 'react';
-import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star, BookOpen, ChevronRight } from 'lucide-react';
-import { categoryManager, getIconComponent } from '../utils/categories';
+import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -23,9 +22,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { logout } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [isMukhtaratExpanded, setIsMukhtaratExpanded] = useState(
-    selectedCategory === 'mukhtarat' || categoryManager.isMukhtaratSubCategory(selectedCategory)
-  );
   
   // Recherche
   const handleSearch = (e: React.FormEvent) => {
@@ -34,22 +30,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setSearchTerm('');
   };
 
-  // Obtenir les sous-catégories مختارات
-  const mukhtaratSubCategories = categoryManager.getMukhtaratSubCategories();
-
-  // Fonction pour basculer l'expansion de مختارات
-  const toggleMukhtarat = () => {
-    setIsMukhtaratExpanded(!isMukhtaratExpanded);
-    if (!isMukhtaratExpanded) {
-      onCategoryChange('mukhtarat');
-    }
-  };
-
   // Catégories principales
   const mainCategories = [
     { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" /> },
     { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
     { id: 'book-library', name: '📚 الرقائق', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'mukhtarat', name: 'مختارات', icon: <BookOpen className="w-5 h-5" /> },
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
   ];
 
@@ -103,55 +89,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               </button>
             ))}
-
-            {/* Catégorie مختارات avec sous-menu */}
-            <div className="space-y-1">
-              <button
-                onClick={toggleMukhtarat}
-                className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
-                  selectedCategory === 'mukhtarat' || categoryManager.isMukhtaratSubCategory(selectedCategory)
-                    ? 'bg-sky-50 text-sky-600'
-                    : 'hover:bg-gray-50 text-gray-700'
-                }`}
-              >
-                <div className="flex items-center gap-3 font-arabic">
-                  <div className="text-gray-500">
-                    <BookOpen className="w-5 h-5" />
-                  </div>
-                  <span>مختارات</span>
-                </div>
-                <div className={`transition-transform duration-200 ${
-                  isMukhtaratExpanded ? 'rotate-90' : ''
-                }`}>
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              </button>
-
-              {/* Sous-menu مختارات */}
-              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                isMukhtaratExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-              }`}>
-                <div className="ml-6 border-l-2 border-gray-200 pl-4 py-2 space-y-1">
-                  {mukhtaratSubCategories.map((subCategory) => {
-                    const IconComponent = getIconComponent(subCategory.icon || '');
-                    return (
-                      <button
-                        key={subCategory.id}
-                        onClick={() => onCategoryChange(subCategory.id)}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm font-arabic ${
-                          selectedCategory === subCategory.id
-                            ? 'bg-sky-100 text-sky-700'
-                            : 'hover:bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        <IconComponent className="w-4 h-4" />
-                        <span>{subCategory.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Tri */}
