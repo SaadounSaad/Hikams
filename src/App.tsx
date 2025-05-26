@@ -1,4 +1,4 @@
-// App.tsx - Version finale propre
+// App.tsx - Version finale avec comportement mukhtarat corrigé
 import { useState, useEffect, useCallback } from 'react';
 import { Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -21,7 +21,7 @@ import MukhtaratPage from './components/MukhtaratPage';
 import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
 
 function AppContent() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { quotes, dailyQuotes, toggleFavorite, deleteQuote, deleteAllQuotes } = useQuotes();
   const { isSepiaMode } = useAppearanceSettings();
   
@@ -41,6 +41,10 @@ function AppContent() {
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
   const [showMukhtaratPage, setShowMukhtaratPage] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(false);
+  // Nouvel état pour stocker le titre du livre sélectionné
+  const [selectedBookTitle, setSelectedBookTitle] = useState<string>('');
+  // Nouvel état pour stocker dynamiquement les book_names
+  const [mukhtaratBookNames, setMukhtaratBookNames] = useState<string[]>([]);
 
   // Fonction améliorée pour basculer les favoris avec bookmark automatique
   const handleToggleFavorite = useCallback(async (id: string) => {
@@ -80,11 +84,56 @@ function AppContent() {
     }
   }, [filteredQuotes, selectedCategory, toggleFavorite]);
 
-  // Fonction pour gérer la sélection depuis MukhtaratPage
-  const handleMukhtaratCategorySelect = useCallback((bookName: string) => {
+  // Fonction pour gérer la sélection depuis MukhtaratPage avec récupération du titre
+  const handleMukhtaratCategorySelect = useCallback(async (bookName: string) => {
+    try {
+      // Récupérer le titre du livre depuis la base de données
+      const { supabase } = await import('./lib/supabase');
+      const { data, error } = await supabase
+        .from('book_titles')
+        .select('book_title')
+        .eq('book_name', bookName)
+        .single();
+
+      if (!error && data) {
+        setSelectedBookTitle(data.book_title);
+        console.log(`📚 Titre récupéré pour ${bookName}: ${data.book_title}`);
+      } else {
+        console.warn('Titre non trouvé pour:', bookName);
+        setSelectedBookTitle('');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération du titre:', error);
+      setSelectedBookTitle('');
+    }
+
     setSelectedCategory(bookName);
     setCurrentCategoryFilter('');
     setShowMukhtaratPage(false);
+  }, []);
+
+  // Charger dynamiquement les book_names au démarrage
+  useEffect(() => {
+    async function loadMukhtaratBookNames() {
+      try {
+        const { supabase } = await import('./lib/supabase');
+        const { data, error } = await supabase
+          .from('book_titles')
+          .select('book_name');
+
+        if (!error && data) {
+          const bookNames = data.map(item => item.book_name);
+          setMukhtaratBookNames(bookNames);
+          console.log('📚 Book names chargés dynamiquement:', bookNames);
+        } else {
+          console.error('Erreur lors du chargement des book_names:', error);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des book_names:', error);
+      }
+    }
+
+    loadMukhtaratBookNames();
   }, []);
 
   // Charger l'index de bookmark au changement de catégorie
@@ -143,7 +192,7 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation]);
 
-  // Effet pour filtrer les citations (version simple avec tri par ordre)
+  // Effet pour filtrer les citations (version modifiée pour mukhtarat sans filtre)
   useEffect(() => {
     console.log(`🔍 Filtrage des citations pour ${selectedCategory}`);
     let newFilteredQuotes: Quote[] = [];
@@ -158,13 +207,22 @@ function AppContent() {
       newFilteredQuotes = [...baseQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
     } 
     else if (selectedCategory === 'favorites') {
-      // Version simple qui marche avec tri par ordre
       const favoriteQuotes = quotes.filter(quote => quote.isFavorite);
       newFilteredQuotes = [...favoriteQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       console.log(`📊 Favoris trouvés: ${newFilteredQuotes.length} (triés par ordre)`);
     }
     else if (selectedCategory === 'mukhtarat') {
-      newFilteredQuotes = [];
+      // MODIFICATION: Utiliser les book_names chargés dynamiquement
+      console.log('🔍 Book names mukhtarat (dynamique):', mukhtaratBookNames);
+      console.log('🔍 Catégories uniques des quotes:', [...new Set(quotes.map(q => q.category))]);
+      console.log('🔍 Total quotes disponibles:', quotes.length);
+      
+      const mukhtaratQuotes = quotes.filter(quote => mukhtaratBookNames.includes(quote.category));
+      newFilteredQuotes = [...mukhtaratQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+      console.log(`📚 Mukhtarat quotes trouvées: ${newFilteredQuotes.length}`);
+      
+      // Réinitialiser le titre du livre quand on revient à mukhtarat général
+      setSelectedBookTitle('');
     }
     else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
       const categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
@@ -196,13 +254,12 @@ function AppContent() {
 
   }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]);
 
-  // Gestionnaire pour la recherche (avec tri par ordre)
+  // Gestionnaire pour la recherche (avec tri par ordre et support mukhtarat)
   const handleSearch = useCallback((results: Quote[]) => {
     setQuotesLoading(true);
     
     setSearchResults(results);
     if (results.length > 0) {
-      // Trier les résultats de recherche par ordre aussi
       const sortedResults = [...results].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       setFilteredQuotes(sortedResults);
     } else {
@@ -222,8 +279,8 @@ function AppContent() {
         categoryQuotes = [...favoriteQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       }
       else if (selectedCategory === 'mukhtarat') {
-        const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
-        const mukhtaratQuotes = quotes.filter(quote => subCategories.includes(quote.category));
+        // Recherche dans toutes les quotes mukhtarat (dynamique)
+        const mukhtaratQuotes = quotes.filter(quote => mukhtaratBookNames.includes(quote.category));
         categoryQuotes = [...mukhtaratQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       }
       else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
@@ -252,17 +309,16 @@ function AppContent() {
     setSearchResults([]);
     setIsMenuOpen(false);
     
-    // Gérer l'affichage de la page مختارات
-    if (category === 'mukhtarat') {
-      setShowMukhtaratPage(true);
-    } else if (categoryManager.isMukhtaratSubCategory(category)) {
-      setShowMukhtaratPage(false);
-    } else {
-      setShowMukhtaratPage(false);
+    // Ne plus afficher automatiquement MukhtaratPage
+    setShowMukhtaratPage(false);
+    
+    // Réinitialiser le titre du livre si on change de catégorie
+    if (category !== selectedCategory) {
+      setSelectedBookTitle('');
     }
   }, [selectedCategory]);
 
-  // Titre de la catégorie avec compteur de favoris
+  // Titre de la catégorie avec gestion du titre de livre sélectionné
   const getCategoryTitle = (categoryId: string): string => {
     switch (categoryId) {
       case 'daily':
@@ -280,8 +336,14 @@ function AppContent() {
       case 'miraj-arwah':
         return 'معراج الأرواح';
       case 'mukhtarat':
-        return 'مختارات';
+        const mukhtaratCount = quotes.filter(quote => mukhtaratBookNames.includes(quote.category)).length;
+        return `مختارات (${mukhtaratCount})`;
       default:
+        // MODIFICATION: Afficher le titre du livre sélectionné au lieu de "حكم الموردين"
+        if (mukhtaratBookNames.includes(categoryId) && selectedBookTitle) {
+          return selectedBookTitle;
+        }
+        
         const categories = categoryManager.getCategories();
         const category = categories.find(c => c.id === categoryId);
         return category ? category.name : 'حكم الموردين';
@@ -343,7 +405,7 @@ function AppContent() {
                   {searchResults.length > 0 ? 'نتيجة البحث' : getCategoryTitle(selectedCategory)}
                 </h1>
                 
-                {/* Compteur pour مختارات - affiché seulement dans les sous-catégories */}
+                {/* Compteur pour sous-catégories mukhtarat */}
                 {categoryManager.isMukhtaratSubCategory(selectedCategory) && (
                   <div className="flex items-center">
                     <span className="text-xs font-medium px-2 py-1 rounded-md bg-sky-100 text-sky-600">
@@ -405,20 +467,34 @@ function AppContent() {
                   <MirajArwahPage onSelectSubcategory={setMirajSubcategory} />
                 )
               ) : (
-                <QuoteViewer
-                  quotes={filteredQuotes}
-                  currentIndex={currentQuoteIndex}
-                  onIndexChange={setCurrentQuoteIndex}
-                  selectedCategory={selectedCategory}
-                  onToggleFavorite={handleToggleFavorite}
-                  onEdit={(quote) => {
-                    setEditingQuote(quote);
-                    setShowForm(true);
-                  }}
-                  onDelete={(id) => {
-                    setDeleteConfirmation(id);
-                  }}
-                />
+                <>
+                  {/* Bouton pour accéder à MukhtaratPage - uniquement dans mukhtarat général */}
+                  {selectedCategory === 'mukhtarat' && (
+                    <div className="mb-6 flex justify-center">
+                      <button
+                        onClick={() => setShowMukhtaratPage(true)}
+                        className="px-6 py-3 bg-sky-600 text-white rounded-xl font-arabic hover:bg-sky-700 transition-colors shadow-lg flex items-center gap-2"
+                      >
+                        <span>📚</span>
+                        <span>تصفح جميع المختارات</span>
+                      </button>
+                    </div>
+                  )}
+                  <QuoteViewer
+                    quotes={filteredQuotes}
+                    currentIndex={currentQuoteIndex}
+                    onIndexChange={setCurrentQuoteIndex}
+                    selectedCategory={selectedCategory}
+                    onToggleFavorite={handleToggleFavorite}
+                    onEdit={(quote) => {
+                      setEditingQuote(quote);
+                      setShowForm(true);
+                    }}
+                    onDelete={(id) => {
+                      setDeleteConfirmation(id);
+                    }}
+                  />
+                </>
               )}
             </div>
           </main>
