@@ -1,5 +1,5 @@
-// App.tsx - Version avec menu latéral permanent et support مختارات dynamique
-import { useState, useEffect, useCallback, useMemo } from 'react';
+// App.tsx - Version finale propre
+import { useState, useEffect, useCallback } from 'react';
 import { Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { QuoteProvider, useQuotes } from './context/QuoteContext';
@@ -12,18 +12,13 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { AuthForm } from './components/AuthForm';
 import { Quote } from './types';
-import { categoryManager, getIconComponent } from './utils/categories';
+import { categoryManager } from './utils/categories';
 import WirdPage from './components/WirdPage';
 import AlbaqiatPage from './components/AlbaqiatPage';
 import GenericThikrPage from './components/GenericThikrPage';
 import MirajArwahPage from './components/MirajArwahPage';
 import MukhtaratPage from './components/MukhtaratPage';
 import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
-import BookReaderPage from './components/BookReaderPage';
-import BookLibraryPage from './components/BookLibraryPage';
-import { useFavorites, FavoritesService } from './services/FavoritesServices';
-import { supabase } from './lib/supabase';
-import { getUnifiedFavorites, invalidateFavoritesCache, debugFavorites } from './utils/favoritesHelper';
 
 function AppContent() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -44,55 +39,46 @@ function AppContent() {
   const [searchResults, setSearchResults] = useState<Quote[]>([]);
   const [mirajSubcategory, setMirajSubcategory] = useState<string | null>(null);
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
-  const [selectedBookTitle, setSelectedBookTitle] = useState<string | null>(null);
   const [showMukhtaratPage, setShowMukhtaratPage] = useState(false);
-  
-  // États pour les favoris unifiés
-  const [unifiedFavorites, setUnifiedFavorites] = useState<Quote[]>([]);
-  const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(false);
-  const [isSynchronizing, setIsSynchronizing] = useState(false);
 
-  // Hook pour gérer les favoris avec le service
-  const favoritesService = useFavorites(user?.id || '');
-
-  // Obtenir les sous-catégories مختارات et compter
-  const mukhtaratCount = useMemo(() => 
-    quotes.filter(q => categoryManager.isMukhtaratSubCategory(q.category)).length,
-    [quotes]
-  );
-
-  // Fonction utilitaire pour exécuter avec retry et timeout
-  const executeWithRetry = useCallback(async (operation, maxRetries = 2, timeoutMs = 10000) => {
-    let retries = 0;
-    
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error('Opération expirée après ' + timeoutMs + 'ms'));
-      }, timeoutMs);
-    });
-    
-    while (retries <= maxRetries) {
-      try {
-        const result = await Promise.race([operation(), timeoutPromise]);
-        clearTimeout(timeoutId);
-        return result;
-      } catch (error) {
-        retries++;
-        clearTimeout(timeoutId);
+  // Fonction améliorée pour basculer les favoris avec bookmark automatique
+  const handleToggleFavorite = useCallback(async (id: string) => {
+    try {
+      console.log('🔄 Toggle favori pour:', id);
+      
+      // 1. Basculer le favori
+      await toggleFavorite(id);
+      
+      // 2. Si la quote devient favorite, la marquer comme bookmark
+      const quote = filteredQuotes.find(q => q.id === id);
+      if (quote) {
+        const quoteIndex = filteredQuotes.findIndex(q => q.id === id);
         
-        if (retries > maxRetries) {
-          console.error('Échec après plusieurs tentatives:', error);
-          return { error };
+        // Vérifier le nouveau statut (après toggle)
+        const newFavoriteStatus = !quote.isFavorite;
+        
+        if (newFavoriteStatus && quoteIndex !== -1) {
+          console.log('📖 Mise à jour du bookmark pour quote likée:', {
+            category: selectedCategory,
+            index: quoteIndex,
+            quoteId: id
+          });
+          
+          // Mettre à jour le bookmark pour cette catégorie
+          await updateBookmark(selectedCategory, quoteIndex);
+          
+          // Mettre aussi à jour l'index courant pour naviguer directement
+          setCurrentQuoteIndex(quoteIndex);
+          
+          console.log('✅ Quote marquée comme bookmark automatiquement');
         }
-        
-        const delay = Math.pow(2, retries - 1) * 500;
-        console.log(`Tentative ${retries}/${maxRetries} échouée, nouvelle tentative dans ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
       }
+
+    } catch (error) {
+      console.error('❌ Erreur lors du toggle favori:', error);
     }
-  }, []);
+  }, [filteredQuotes, selectedCategory, toggleFavorite]);
 
   // Fonction pour gérer la sélection depuis MukhtaratPage
   const handleMukhtaratCategorySelect = useCallback((bookName: string) => {
@@ -101,193 +87,13 @@ function AppContent() {
     setShowMukhtaratPage(false);
   }, []);
 
-  // Fonction pour charger les favoris unifiés
-  const loadUnifiedFavorites = useCallback(async () => {
-    if (!user?.id || favoritesLoading) return;
-    
-    setFavoritesLoading(true);
-    try {
-      const result = await executeWithRetry(async () => {
-        return await getUnifiedFavorites(user.id);
-      });
-      
-      if (result.error) {
-        throw result.error;
-      }
-      
-      setUnifiedFavorites(prevFavorites => {
-        if (JSON.stringify(prevFavorites) === JSON.stringify(result)) {
-          return prevFavorites;
-        }
-        return result;
-      });
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des favoris:', error);
-    } finally {
-      setFavoritesLoading(false);
-    }
-  }, [user?.id, favoritesLoading, executeWithRetry]);
-
-  // Fonction robuste pour synchroniser les favoris au démarrage
-  useEffect(() => {
-    if (!user?.id || isSynchronizing) return;
-    
-    const initializeFavorites = async () => {
-      console.log('🔄 Initialisation des favoris au démarrage');
-      setIsSynchronizing(true);
-      
-      try {
-        await favoritesService.syncFavorites();
-        invalidateFavoritesCache();
-        const favorites = await getUnifiedFavorites(user.id);
-        console.log(`📊 ${favorites.length} favoris chargés à l'initialisation`);
-        setUnifiedFavorites(favorites);
-      } catch (error) {
-        console.error('❌ Erreur lors de l\'initialisation des favoris:', error);
-      } finally {
-        setIsSynchronizing(false);
-      }
-    };
-    
-    initializeFavorites();
-  }, [user?.id]);
-
-  // Charger les favoris quand l'utilisateur change
-  useEffect(() => {
-    if (user?.id) {
-      let isMounted = true;
-      
-      const initializeApp = async () => {
-        try {
-          if (isMounted) {
-            await loadUnifiedFavorites();
-          }
-        } catch (error) {
-          if (isMounted) {
-            console.error('Erreur d\'initialisation:', error);
-          }
-        }
-      };
-      
-      initializeApp();
-      
-      return () => {
-        isMounted = false;
-      };
-    }
-  }, [user?.id, loadUnifiedFavorites]);
-
-  // Fonction améliorée pour basculer les favoris
-  const handleToggleFavorite = useCallback(async (id: string, contentType?: 'quote' | 'book_entry') => {
-    try {
-      if (favoritesLoading || isSynchronizing || !user?.id) {
-        if (!user?.id) {
-          alert('Vous devez être connecté pour ajouter des favoris');
-        }
-        return;
-      }
-
-      setFavoritesLoading(true);
-
-      let detectedType = contentType;
-      if (!detectedType) {
-        const quote = filteredQuotes.find(q => q.id === id);
-        if (quote) {
-          detectedType = quote.isBookEntry ? 'book_entry' : 'quote';
-        }
-      }
-
-      if (!detectedType) {
-        console.error('❌ Impossible de déterminer le type de contenu pour:', id);
-        return;
-      }
-
-      let newStatus: boolean;
-
-      if (detectedType === 'quote') {
-        const result = await executeWithRetry(() => favoritesService.toggleQuoteFavorite(id));
-        if (result.error) throw result.error;
-        newStatus = result;
-        await toggleFavorite(id);
-      } else {
-        const realId = id.startsWith('book-entry-') ? id.replace('book-entry-', '') : id;
-        const result = await executeWithRetry(() => favoritesService.toggleBookEntryFavorite(realId));
-        if (result.error) throw result.error;
-        newStatus = result;
-      }
-
-      await loadUnifiedFavorites();
-
-      if (detectedType === 'quote' && newStatus) {
-        const quoteIndex = filteredQuotes.findIndex(q => q.id === id);
-        if (quoteIndex !== -1) {
-          await updateBookmark(selectedCategory, quoteIndex);
-        }
-      }
-
-    } catch (error) {
-      console.error('❌ Erreur lors du basculement du favori:', error);
-      alert('Erreur lors de l\'ajout aux favoris. Vérifiez votre connexion.');
-    } finally {
-      setFavoritesLoading(false);
-    }
-  }, [
-    user?.id,
-    favoritesLoading,
-    isSynchronizing,
-    filteredQuotes,
-    selectedCategory,
-    toggleFavorite,
-    loadUnifiedFavorites,
-    favoritesService,
-    executeWithRetry
-  ]);
-
-  // Fonction spécifique pour supprimer depuis la liste des favoris
-  const handleRemoveFromFavorites = useCallback(async (id: string) => {
-    try {
-      if (!user?.id || favoritesLoading || isSynchronizing) return;
-      
-      setFavoritesLoading(true);
-
-      const quote = filteredQuotes.find(q => q.id === id);
-      if (!quote) return;
-
-      const contentType = quote.isBookEntry ? 'book_entry' : 'quote';
-      const realId = quote.isBookEntry && quote.originalEntryId 
-        ? quote.originalEntryId.toString() 
-        : id.replace('book-entry-', '');
-
-      const result = await executeWithRetry(async () => {
-        return await favoritesService.removeFavorite(realId, contentType);
-      });
-      
-      if (result && result.error) throw result.error;
-      
-      await loadUnifiedFavorites();
-
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression du favori:', error);
-    } finally {
-      setFavoritesLoading(false);
-    }
-  }, [user?.id, filteredQuotes, favoritesLoading, isSynchronizing, favoritesService, loadUnifiedFavorites, executeWithRetry]);
-
-  // Fonction unifiée pour gérer les favoris selon le contexte
-  const handleUnifiedToggleFavorite = useCallback(async (id: string) => {
-    if (selectedCategory === 'favorites') {
-      await handleRemoveFromFavorites(id);
-    } else {
-      await handleToggleFavorite(id);
-    }
-  }, [selectedCategory, handleRemoveFromFavorites, handleToggleFavorite]);
-
   // Charger l'index de bookmark au changement de catégorie
   useEffect(() => {
     async function loadBookmarkIndex() {
       const index = await getSavedPageIndex(selectedCategory);
       const validIndex = index ?? 0;
       setCurrentQuoteIndex(validIndex);
+      console.log(`📖 Bookmark chargé pour ${selectedCategory}: index ${validIndex}`);
     }
 
     loadBookmarkIndex();
@@ -337,94 +143,103 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation]);
 
-  // Effet pour filtrer les citations (modifié pour supporter book_name)
+  // Effet pour filtrer les citations (version simple avec tri par ordre)
   useEffect(() => {
-    if (favoritesLoading) return;
-    
     console.log(`🔍 Filtrage des citations pour ${selectedCategory}`);
     let newFilteredQuotes: Quote[] = [];
 
     if (selectedCategory === 'daily') {
-      newFilteredQuotes = dailyQuotes;
+      newFilteredQuotes = [...dailyQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
     } 
     else if (selectedCategory === 'all') {
-      newFilteredQuotes = currentCategoryFilter 
+      const baseQuotes = currentCategoryFilter 
         ? quotes.filter(quote => quote.category === currentCategoryFilter)
         : quotes;
+      newFilteredQuotes = [...baseQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
     } 
     else if (selectedCategory === 'favorites') {
-      newFilteredQuotes = unifiedFavorites;
-      console.log(`📊 Utilisation de ${unifiedFavorites.length} favoris unifiés pour l'affichage`);
+      // Version simple qui marche avec tri par ordre
+      const favoriteQuotes = quotes.filter(quote => quote.isFavorite);
+      newFilteredQuotes = [...favoriteQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+      console.log(`📊 Favoris trouvés: ${newFilteredQuotes.length} (triés par ordre)`);
     }
     else if (selectedCategory === 'mukhtarat') {
-      // Ne pas filtrer ici, juste afficher la page
       newFilteredQuotes = [];
     }
     else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
-      // Ancienne logique pour les sous-catégories fixes
-      newFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
+      const categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+      newFilteredQuotes = [...categoryQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
     }
     else {
-      // Nouvelle logique : filtrer par book_name ou category
-      newFilteredQuotes = quotes.filter(quote => 
-        quote.category === selectedCategory || 
-        quote.book_name === selectedCategory // Ajout du filtrage par book_name
-      );
+      const categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+      newFilteredQuotes = [...categoryQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
     }
 
     setFilteredQuotes(newFilteredQuotes);
     
-    getSavedPageIndex(selectedCategory).then(index => {
-      const validIndex = index ?? 0;
-      if (validIndex >= 0 && validIndex < newFilteredQuotes.length) {
-        setCurrentQuoteIndex(validIndex);
-      } else {
+    // Charger l'index seulement si on a des quotes
+    if (newFilteredQuotes.length > 0) {
+      getSavedPageIndex(selectedCategory).then(index => {
+        const validIndex = index ?? 0;
+        if (validIndex >= 0 && validIndex < newFilteredQuotes.length) {
+          setCurrentQuoteIndex(validIndex);
+        } else {
+          setCurrentQuoteIndex(0);
+        }
+      }).catch(error => {
+        console.error('Erreur lors du chargement de l\'index:', error);
         setCurrentQuoteIndex(0);
-      }
-    }).catch(error => {
-      console.error('Erreur lors du chargement de l\'index:', error);
+      });
+    } else {
       setCurrentQuoteIndex(0);
-    });
+    }
 
-  }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes, unifiedFavorites, favoritesLoading]);
+  }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]);
 
-  // Gestionnaire pour la recherche avec favoris unifiés
+  // Gestionnaire pour la recherche (avec tri par ordre)
   const handleSearch = useCallback((results: Quote[]) => {
     setQuotesLoading(true);
     
     setSearchResults(results);
     if (results.length > 0) {
-      setFilteredQuotes(results);
+      // Trier les résultats de recherche par ordre aussi
+      const sortedResults = [...results].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+      setFilteredQuotes(sortedResults);
     } else {
       let categoryQuotes: Quote[] = [];
       
       if (selectedCategory === 'daily') {
-        categoryQuotes = dailyQuotes;
+        categoryQuotes = [...dailyQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       } 
       else if (selectedCategory === 'all') {
-        categoryQuotes = currentCategoryFilter 
+        const baseQuotes = currentCategoryFilter 
           ? quotes.filter(quote => quote.category === currentCategoryFilter)
           : quotes;
+        categoryQuotes = [...baseQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       } 
       else if (selectedCategory === 'favorites') {
-        categoryQuotes = unifiedFavorites;
+        const favoriteQuotes = quotes.filter(quote => quote.isFavorite);
+        categoryQuotes = [...favoriteQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       }
       else if (selectedCategory === 'mukhtarat') {
         const subCategories = categoryManager.getMukhtaratSubCategories().map(cat => cat.id);
-        categoryQuotes = quotes.filter(quote => subCategories.includes(quote.category));
+        const mukhtaratQuotes = quotes.filter(quote => subCategories.includes(quote.category));
+        categoryQuotes = [...mukhtaratQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       }
       else if (categoryManager.isMukhtaratSubCategory(selectedCategory)) {
-        categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+        const subCategoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+        categoryQuotes = [...subCategoryQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       }
       else {
-        categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
+        const categoryFilteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
+        categoryQuotes = [...categoryFilteredQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
       }
       
       setFilteredQuotes(categoryQuotes);
     }
     
     setTimeout(() => setQuotesLoading(false), 300);
-  }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes, unifiedFavorites]);
+  }, [selectedCategory, currentCategoryFilter, quotes, dailyQuotes]);
 
   // Gestionnaire pour le changement de catégorie
   const handleCategoryChange = useCallback((category: string) => {
@@ -441,14 +256,13 @@ function AppContent() {
     if (category === 'mukhtarat') {
       setShowMukhtaratPage(true);
     } else if (categoryManager.isMukhtaratSubCategory(category)) {
-      // Si on clique sur une sous-catégorie, fermer la page مختارات
       setShowMukhtaratPage(false);
     } else {
       setShowMukhtaratPage(false);
     }
   }, [selectedCategory]);
 
-  // Titre de la catégorie avec compteur de favoris unifié
+  // Titre de la catégorie avec compteur de favoris
   const getCategoryTitle = (categoryId: string): string => {
     switch (categoryId) {
       case 'daily':
@@ -456,10 +270,7 @@ function AppContent() {
       case 'all':
         return '';
       case 'favorites':
-        if (favoritesLoading) {
-          return 'المفضلة (تحميل...)';
-        }
-        return `المفضلة (${unifiedFavorites.length})`;
+        return `المفضلة (${quotes.filter(quote => quote.isFavorite).length})`;
       case 'verses':
         return 'آيات مِفتاحية';
       case 'hadiths':
@@ -507,8 +318,8 @@ function AppContent() {
             currentCategoryFilter={currentCategoryFilter}
             onCategoryChange={handleCategoryChange}
             onSearch={handleSearch}
-            isOpen={true} // Toujours ouvert sur desktop
-            onClose={() => {}} // Pas de fermeture sur desktop
+            isOpen={true}
+            onClose={() => {}}
             onShowSettings={() => setShowSettings(true)}
           />
         </div>
@@ -540,27 +351,15 @@ function AppContent() {
                     </span>
                   </div>
                 )}
-
-                {/* Indicateurs de chargement */}
-                {selectedCategory === 'favorites' && favoritesLoading && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-600"></div>
-                )}
-                
-                {isSynchronizing && (
-                  <div className="flex items-center gap-2 px-2 py-1 bg-amber-100 text-amber-700 rounded-md text-xs">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-700"></div>
-                    <span>Synchronisation...</span>
-                  </div>
-                )}
               </div>
             </div>
           </header>
 
-          {/* Contenu principal - plus de sous-navigation */}
+          {/* Contenu principal */}
           <main className="flex-1 p-6">
             <div className="max-w-3xl mx-auto relative">
               {/* Message informatif pour la section favoris vide */}
-              {selectedCategory === 'favorites' && filteredQuotes.length === 0 && !favoritesLoading && (
+              {selectedCategory === 'favorites' && filteredQuotes.length === 0 && (
                 <div className="text-center py-12">
                   <div className="text-gray-400 mb-4">
                     <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
@@ -568,9 +367,9 @@ function AppContent() {
                     </svg>
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2 font-arabic">لا توجد مفضلة بعد</h3>
-                  <p className="text-gray-500 mb-4 font-arabic">ابدأ بإضافة بعض الحكم أو المقاطع المفضلة</p>
+                  <p className="text-gray-500 mb-4 font-arabic">ابدأ بإضافة بعض الحكم المفضلة</p>
                   <div className="space-y-2 text-sm text-gray-400">
-                    <p>💡 يمكنك إضافة المفضلة من الحكم العادية أو من مكتبة الكتب</p>
+                    <p>💡 يمكنك إضافة المفضلة من الحكم العادية</p>
                     <p>⌨️ استخدم الرقم "3" للانتقال السريع إلى المفضلة</p>
                   </div>
                 </div>
@@ -605,33 +404,19 @@ function AppContent() {
                 ) : (
                   <MirajArwahPage onSelectSubcategory={setMirajSubcategory} />
                 )
-              ) : selectedCategory === 'book-library' ? (
-                selectedBookTitle ? (
-                  <BookReaderPage
-                    bookTitle={selectedBookTitle}
-                    onBack={() => setSelectedBookTitle(null)}
-                  />
-                ) : (
-                  <BookLibraryPage onSelectBook={setSelectedBookTitle} />
-                )
               ) : (
                 <QuoteViewer
                   quotes={filteredQuotes}
                   currentIndex={currentQuoteIndex}
                   onIndexChange={setCurrentQuoteIndex}
                   selectedCategory={selectedCategory}
-                  onToggleFavorite={handleUnifiedToggleFavorite}
+                  onToggleFavorite={handleToggleFavorite}
                   onEdit={(quote) => {
-                    if (!quote.isBookEntry) {
-                      setEditingQuote(quote);
-                      setShowForm(true);
-                    }
+                    setEditingQuote(quote);
+                    setShowForm(true);
                   }}
                   onDelete={(id) => {
-                    const quote = filteredQuotes.find(q => q.id === id);
-                    if (quote && !quote.isBookEntry) {
-                      setDeleteConfirmation(id);
-                    }
+                    setDeleteConfirmation(id);
                   }}
                 />
               )}

@@ -1,6 +1,6 @@
-// Sidebar.tsx - Version simplifiée sans sous-menu مختارات
+// Sidebar.tsx - Version sans références الرقائق
 import React, { useState } from 'react';
-import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star, BookOpen } from 'lucide-react';
+import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -30,12 +30,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setSearchTerm('');
   };
 
-  // Catégories principales
+  // Catégories principales - suppression de 'book-library' (الرقائق)
   const mainCategories = [
     { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" /> },
     { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'book-library', name: '📚 الرقائق', icon: <BookOpen className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'مختارات', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'mukhtarat', name: 'مختارات', icon: <Star className="w-5 h-5" /> },
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
   ];
 
