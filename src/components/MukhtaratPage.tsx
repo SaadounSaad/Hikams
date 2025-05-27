@@ -102,20 +102,20 @@ const MukhtaratPage: React.FC<MukhtaratPageProps> = ({ onClose, onSelectCategory
           </div>
         ) : (
           <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               {bookTitles.map((book) => (
                 <button
                   key={book.id}
                   onClick={() => handleCategoryClick(book.book_name)}
-                  className="group relative p-6 bg-white border-2 border-gray-200 rounded-xl hover:border-sky-400 hover:shadow-lg transition-all duration-200"
+                  className="group relative p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-sky-400 hover:shadow-lg transition-all duration-200 text-right"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-bold font-arabic text-gray-800 group-hover:text-sky-600 transition-colors" dir="rtl">
+                    
+                    <div className="flex-1 mr-3">
+                      <h3 className="text-base font-bold font-arabic text-gray-800 group-hover:text-sky-600 transition-colors leading-relaxed" dir="rtl">
                         {book.book_title}
                       </h3>
                     </div>
-                    <BookOpen className="w-6 h-6 text-gray-400 group-hover:text-sky-600 transition-colors ml-3" />
                   </div>
                   
                   {/* Indicateur visuel au survol */}

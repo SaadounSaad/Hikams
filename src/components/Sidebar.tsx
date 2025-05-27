@@ -32,10 +32,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Catégories principales - suppression de 'book-library' (الرقائق)
   const mainCategories = [
-    { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" /> },
+    
     { id: 'daily', name: 'حكمة اليوم', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'مختارات', icon: <Star className="w-5 h-5" /> },
-    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> }
+    { id: 'mukhtarat', name: 'عٌدَّة المريد', icon: <Star className="w-5 h-5" /> },
+    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> } ,
+     { id: 'separator', type: 'separator' },
+    { id: 'miraj-arwah', name: 'معراج الأرواح', icon: <Star className="w-5 h-5" /> }
   ];
 
   return (
@@ -69,30 +71,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             </div>
           </form>
-
+          {/* Séparateur */}
+          <div className="my-4 border-t border-gray-300"></div>
           {/* Catégories principales */}
-          <div className="space-y-1">
+          <div className="space-y-3">
             {mainCategories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => onCategoryChange(category.id)}
-                className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
-                  selectedCategory === category.id
-                    ? 'bg-sky-50 text-sky-600'
-                    : 'hover:bg-gray-50 text-gray-700'
-                }`}
-              >
-                <div className="flex items-center gap-3 font-arabic">
-                  <div className="text-gray-500">{category.icon}</div>
-                  <span>{category.name}</span>
-                </div>
-              </button>
+              category.type === 'separator' ? (
+                <div key={category.id} className="border-t border-gray-300 my-2"></div>
+                
+              ) : (
+                <button
+                  key={category.id}
+                  onClick={() => onCategoryChange(category.id)}
+                  className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
+                    selectedCategory === category.id
+                      ? 'bg-sky-50 text-sky-600'
+                      : 'hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 font-arabic">
+                    <div className="text-gray-500">{category.icon}</div>
+                    <span>{category.name}</span>
+                  </div>
+                </button>
+              )
             ))}
           </div>
 
           {/* Tri */}
           <div className="mt-6">
-            <div className="border-t border-gray-200 pt-4">
+            <div className="border-t border-gray-300 pt-4">
               <button
                 className="w-full flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
               >

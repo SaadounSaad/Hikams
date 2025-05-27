@@ -1,4 +1,4 @@
-// src/components/QuoteViewer.tsx - Version corrigée
+// src/components/QuoteViewer.tsx - Version avec menu mukhtarat intégré
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
@@ -13,6 +13,8 @@ interface QuoteViewerProps {
   onToggleFavorite: (id: string) => void;
   onEdit: (quote: Quote) => void;
   onDelete: (id: string) => void;
+  // Nouvelle prop pour le menu mukhtarat
+  renderExtraControls?: () => React.ReactNode;
 }
 
 export const QuoteViewer: React.FC<QuoteViewerProps> = ({
@@ -23,9 +25,10 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   onToggleFavorite,
   onEdit,
   onDelete,
+  renderExtraControls, // Nouvelle prop
 }) => {
   const [bookmarkIndex, setBookmarkIndex] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // Ajout d'un état de chargement
+  const [isLoading, setIsLoading] = useState(false);
 
   // Correction: S'assurer que currentIndex est dans les limites valides
   useEffect(() => {
@@ -37,14 +40,14 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   useEffect(() => {
     // Charger l'index du bookmark pour la catégorie sélectionnée
     const fetchBookmark = async () => {
-      setIsLoading(true); // Indiquer le début du chargement
+      setIsLoading(true);
       try {
         const index = await getSavedPageIndex(selectedCategory);
         setBookmarkIndex(index);
       } catch (error) {
         console.error("Erreur lors du chargement du signet:", error);
       } finally {
-        setIsLoading(false); // Chargement terminé, peu importe le résultat
+        setIsLoading(false);
       }
     };
     fetchBookmark();
@@ -77,10 +80,10 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   };
 
   const handleManualBookmark = async () => {
-    if (quotes.length === 0) return; // Ne pas créer de signet s'il n'y a pas de citations
+    if (quotes.length === 0) return;
     
     await updateBookmark(selectedCategory, currentIndex);
-    setBookmarkIndex(currentIndex); // mise à jour visuelle
+    setBookmarkIndex(currentIndex);
   };
 
   // Si aucune citation n'est disponible
@@ -114,54 +117,76 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
 
   return (
     <>
+      {/* Barre de navigation avec menu mukhtarat intégré */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+        {/* Menu mukhtarat à l'extrême gauche */}
+        <div className="flex items-center gap-1">
+          {renderExtraControls && (
+            <div className="mr-1">
+              {renderExtraControls()}
+            </div>
+          )}
+          
+          {/* Boutons de navigation gauche */}
           <button 
             onClick={handleNavigateToFirst} 
-            className="p-3 rounded-full hover:bg-white/50"
-            disabled={quotes.length === 0}
+            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            disabled={quotes.length === 0 || currentIndex === 0}
+            title="الذهاب إلى البداية"
           >
-            <ChevronsLeft className="w-6 h-6" />
+            <ChevronsLeft className="w-5 h-5" />
           </button>
           <button 
             onClick={() => handleSwipe('right')} 
-            className="p-3 rounded-full hover:bg-white/50"
-            disabled={quotes.length === 0}
+            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            disabled={quotes.length === 0 || currentIndex === 0}
+            title="السابق"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
         </div>
-        <span className="text-sm font-medium text-gray-500 bg-white/50 px-4 py-2 rounded-full">
+
+        {/* Compteur central */}
+        <span className="text-sm font-medium text-gray-500 bg-white/50 px-3 py-1.5 rounded-full">
           {currentIndex + 1} / {quotes.length}
         </span>
-        <div className="flex items-center gap-2">
+
+        {/* Boutons de navigation droite */}
+        <div className="flex items-center gap-1">
           <button 
             onClick={() => handleSwipe('left')} 
-            className="p-3 rounded-full hover:bg-white/50"
-            disabled={quotes.length === 0}
+            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            disabled={quotes.length === 0 || currentIndex >= quotes.length - 1}
+            title="التالي"
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronRight className="w-5 h-5" />
           </button>
           <button 
             onClick={handleNavigateToLast} 
-            className="p-3 rounded-full hover:bg-white/50"
-            disabled={quotes.length === 0}
+            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            disabled={quotes.length === 0 || currentIndex >= quotes.length - 1}
+            title="الذهاب إلى النهاية"
           >
-            <ChevronsRight className="w-6 h-6" />
+            <ChevronsRight className="w-5 h-5" />
           </button>
+          
+          {/* Bouton bookmark */}
           <button
             onClick={handleManualBookmark}
-            className={`p-3 rounded-full transition-colors ${
-              bookmarkIndex === currentIndex ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+            className={`p-2 rounded-full transition-colors ${
+              bookmarkIndex === currentIndex 
+                ? 'bg-blue-100 text-blue-600' 
+                : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
             }`}
-            title="Enregistrer cette page comme marqueur"
+            title="إضافة إشارة مرجعية"
             disabled={quotes.length === 0}
           >
-            <Bookmark className="w-5 h-5" />
+            <Bookmark className="w-4 h-4" />
           </button>
         </div>
       </div>
 
+      {/* Contenu de la citation */}
       {currentQuote ? (
         <QuoteCard
           quote={currentQuote}
