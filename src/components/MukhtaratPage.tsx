@@ -62,7 +62,7 @@ const MukhtaratPage: React.FC<MukhtaratPageProps> = ({ onClose, onSelectCategory
     <div className="fixed inset-0 bg-white z-50 flex flex-col">
       {/* Header avec bouton X */}
       <div className="flex items-center justify-between p-4 border-b">
-        <h1 className="text-2xl font-bold font-arabic">مختارات</h1>
+        <h1 className="text-2xl font-bold font-arabic">جميع التصنيفات</h1>
         <button
           onClick={onClose}
           className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-colors shadow-sm"
