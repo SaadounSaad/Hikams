@@ -1,4 +1,4 @@
-// src/components/QuoteViewer.tsx - Version avec menu mukhtarat intégré
+// src/components/QuoteViewer.tsx - Version avec support de recherche
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
@@ -13,7 +13,8 @@ interface QuoteViewerProps {
   onToggleFavorite: (id: string) => void;
   onEdit: (quote: Quote) => void;
   onDelete: (id: string) => void;
-  // Nouvelle prop pour le menu mukhtarat
+  searchTerm?: string; // Nouveau prop pour passer le terme de recherche
+  // Prop pour le menu mukhtarat
   renderExtraControls?: () => React.ReactNode;
 }
 
@@ -25,7 +26,8 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   onToggleFavorite,
   onEdit,
   onDelete,
-  renderExtraControls, // Nouvelle prop
+  searchTerm, // Nouveau prop
+  renderExtraControls,
 }) => {
   const [bookmarkIndex, setBookmarkIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -93,7 +95,12 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
         <div className="text-gray-500 space-y-2">
           <Library className="w-12 h-12 mx-auto text-gray-400" />
           <p className="text-lg font-medium">Aucune citation trouvée</p>
-          <p className="text-sm">Commencez par ajouter une nouvelle citation</p>
+          <p className="text-sm">
+            {searchTerm ? 
+              `Aucun résultat pour "${searchTerm}"` : 
+              'Commencez par ajouter une nouvelle citation'
+            }
+          </p>
         </div>
       </div>
     );
@@ -117,6 +124,20 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
 
   return (
     <>
+      {/* Affichage du statut de recherche si applicable */}
+      {searchTerm && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center gap-2 text-yellow-800">
+            <div className="text-sm">
+              <span className="font-medium">
+                {quotes.length} résultat{quotes.length > 1 ? 's' : ''} trouvé{quotes.length > 1 ? 's' : ''} pour: 
+              </span>
+              <span className="font-bold ml-1">"{searchTerm}"</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Barre de navigation avec menu mukhtarat intégré */}
       <div className="flex items-center justify-between mb-4">
         {/* Menu mukhtarat à l'extrême gauche */}
@@ -194,6 +215,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           onEdit={onEdit}
           onDelete={onDelete}
           onSwipe={handleSwipe}
+          searchTerm={searchTerm} // Passer le terme de recherche à QuoteCard
         />
       ) : (
         <div className="p-6 rounded-xl bg-white shadow">

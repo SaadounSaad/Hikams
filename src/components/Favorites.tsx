@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
-import { FavoritesService, FavoritesResult, Quote, BookEntry } from '../services/FavoritesServices';
+import { FavoritesService, FavoritesResult, Quote, BookEntry } from '../services/FavoritesService';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { BookOpen, Quote as QuoteIcon, Star, StarOff, Trash } from 'lucide-react';
 
 interface FavoritesProps {
-  onSelectItem?: (item: Quote | BookEntry, type: 'quote' | 'book_entry') => void;
+  onSelectItem?: (item: Quote | BookEntry, type: 'quote' | 'book-entry') => void;
 }
 
 const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
@@ -39,7 +39,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
   };
 
   // Supprimer un favori
-  const removeFavorite = async (type: 'quote' | 'book_entry', id: string) => {
+  const removeFavorite = async (type: 'quote' | 'book-entry', id: string) => {
     if (!user) return;
     
     try {
@@ -111,7 +111,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
             <TabsContent value="all" className="space-y-4">
               {/* Afficher les citations et les livres ensemble */}
               {[...favorites.quotes.map(quote => ({ item: quote, type: 'quote' as const })),
-                ...favorites.bookEntries.map(entry => ({ item: entry, type: 'book_entry' as const }))]
+                ...favorites.bookEntries.map(entry => ({ item: entry, type: 'book-entry' as const }))]
                 .sort((a, b) => {
                   const dateA = new Date(a.item.createdAt || '');
                   const dateB = new Date(b.item.createdAt || '');
@@ -148,9 +148,9 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
                 <FavoriteCard 
                   key={`book-${entry.id}`}
                   item={entry}
-                  type="book_entry"
-                  onRemove={() => removeFavorite('book_entry', entry.id)}
-                  onSelect={() => onSelectItem?.(entry, 'book_entry')}
+                  type="book-entry"
+                  onRemove={() => removeFavorite('book-entry', entry.id)}
+                  onSelect={() => onSelectItem?.(entry, 'book-entry')}
                 />
               ))}
             </TabsContent>
@@ -164,7 +164,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
 // Composant pour une carte de favori
 interface FavoriteCardProps {
   item: Quote | BookEntry;
-  type: 'quote' | 'book_entry';
+  type: 'quote' | 'book-entry';
   onRemove: () => void;
   onSelect: () => void;
 }

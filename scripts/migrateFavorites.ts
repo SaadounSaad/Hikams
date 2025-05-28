@@ -90,7 +90,7 @@ async function migrateUserFavorites(userId: string) {
       })),
       ...(bookFavorites || []).map((book) => ({
         user_id: userId,
-        content_type: 'book_entry',
+        content_type: 'book-entry',
         content_id: book.entry_id,
         notes: book.notes,
       })),

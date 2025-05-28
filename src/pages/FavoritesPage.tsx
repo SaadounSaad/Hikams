@@ -114,7 +114,7 @@ const FavoritesPage: React.FC = () => {
             </div>
             <FavoriteButton 
               contentId={selectedBookEntry.id}
-              contentType="book_entry"
+              contentType="book-entry"
               size="md"
             />
           </div>
@@ -187,7 +187,7 @@ const FavoritesPage: React.FC = () => {
           {activeTab === 'all' && (
             <div className="space-y-6">
               {[...favorites.quotes.map(q => ({ type: 'quote' as const, item: q })),
-                ...favorites.bookEntries.map(b => ({ type: 'book_entry' as const, item: b }))]
+                ...favorites.bookEntries.map(b => ({ type: 'book-entry' as const, item: b }))]
                 .sort((a, b) => {
                   const dateA = new Date(a.item.createdAt || '');
                   const dateB = new Date(b.item.createdAt || '');
@@ -232,7 +232,7 @@ const FavoritesPage: React.FC = () => {
                   <FavoriteCard 
                     key={`book-${bookEntry.id}`} 
                     item={bookEntry} 
-                    type="book_entry"
+                    type="book-entry"
                     onSelect={handleSelectBookEntry}
                   />
                 ))
@@ -254,7 +254,7 @@ const FavoritesPage: React.FC = () => {
 // Composant pour une carte de favori
 interface FavoriteCardProps {
   item: Quote | BookEntry;
-  type: 'quote' | 'book_entry';
+  type: 'quote' | 'book-entry';
   onSelect: (item: any) => void;
 }
 

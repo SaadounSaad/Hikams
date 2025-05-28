@@ -1,4 +1,4 @@
-// App.tsx - Version optimisée avec corrections de performance
+// App.tsx - Version corrigée avec recherche arabe optimisée
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Menu, X, ChevronDown, Search, Home } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -19,11 +19,13 @@ import GenericThikrPage from './components/GenericThikrPage';
 import MirajArwahPage from './components/MirajArwahPage';
 import MukhtaratPage from './components/MukhtaratPage';
 import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
+import { arabicTextContains } from './utils/arabic-search-utils';
 
 // Composant Menu Déroulant Mukhtarat
 const MukhtaratDropdownMenu = ({ 
   onShowAll, 
-  onShowMukhtaratPage
+  onShowMukhtaratPage,
+  onGoToLastPage
 }: {
   onShowAll: () => void;
   onShowMukhtaratPage: () => void;
@@ -31,7 +33,6 @@ const MukhtaratDropdownMenu = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Fermer le menu quand on clique à l'extérieur
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -54,7 +55,6 @@ const MukhtaratDropdownMenu = ({
 
   return (
     <div className="relative" data-dropdown-menu>
-      {/* Bouton principal */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors shadow-sm"
@@ -64,13 +64,16 @@ const MukhtaratDropdownMenu = ({
         <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Menu déroulant */}
       {isOpen && (
         <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
-          {/* Option 1: آخر تصفح */}
+          <button
+            onClick={() => handleOptionClick(onGoToLastPage)}
+            className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-gray-50 transition-colors border-b border-gray-100"
+          >
+            <Search className="w-4 h-4 text-green-600" />
+            <span className="font-arabic text-gray-700">آخر تصفح</span>
+          </button>
 
-
-          {/* Option 2: اختر كتابا */}
           <button
             onClick={() => handleOptionClick(onShowMukhtaratPage)}
             className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-gray-50 transition-colors border-b border-gray-100"
@@ -79,7 +82,6 @@ const MukhtaratDropdownMenu = ({
             <span className="font-arabic text-gray-700">اختر كتابا</span>
           </button>
 
-          {/* Option 3: الكل */}
           <button
             onClick={() => handleOptionClick(onShowAll)}
             className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-gray-50 transition-colors"
@@ -111,20 +113,27 @@ function AppContent() {
   const [showDeleteAllConfirmation, setShowDeleteAllConfirmation] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [filteredQuotes, setFilteredQuotes] = useState<Quote[]>([]);
-  const [searchResults, setSearchResults] = useState<Quote[]>([]);
   const [mirajSubcategory, setMirajSubcategory] = useState<string | null>(null);
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
   const [showMukhtaratPage, setShowMukhtaratPage] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(false);
   
-  // États spécifiques pour mukhtarat avec optimisations
+  // États spécifiques pour mukhtarat
   const [selectedBookTitle, setSelectedBookTitle] = useState<string>('');
   const [mukhtaratBookNames, setMukhtaratBookNames] = useState<string[]>([]);
   const [mukhtaratViewMode, setMukhtaratViewMode] = useState<'all' | 'subcategory'>('all');
   const [bookNamesLoaded, setBookNamesLoaded] = useState(false);
   const [bookmarkCache, setBookmarkCache] = useState<Map<string, number>>(new Map());
+  
+  // États pour la recherche - NOUVELLE APPROCHE
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
+  
+  // Vérifier si on est dans une catégorie qui supporte la recherche (pour les messages d'erreur)
+  const isSearchContext: boolean = selectedCategory === 'mukhtarat' || 
+    (!!selectedCategory && mukhtaratBookNames.includes(selectedCategory));
 
-  // Fonction améliorée pour basculer les favoris avec bookmark automatique
+  // Fonction pour basculer les favoris avec bookmark automatique
   const handleToggleFavorite = useCallback(async (id: string) => {
     try {
       console.log('🔄 Toggle favori pour:', id);
@@ -137,18 +146,11 @@ function AppContent() {
         const newFavoriteStatus = !quote.isFavorite;
         
         if (newFavoriteStatus && quoteIndex !== -1) {
-          console.log('📖 Mise à jour du bookmark pour quote likée:', {
-            category: selectedCategory,
-            index: quoteIndex,
-            quoteId: id
-          });
-          
           await updateBookmark(selectedCategory, quoteIndex);
           setCurrentQuoteIndex(quoteIndex);
           console.log('✅ Quote marquée comme bookmark automatiquement');
         }
       }
-
     } catch (error) {
       console.error('❌ Erreur lors du toggle favori:', error);
     }
@@ -173,6 +175,10 @@ function AppContent() {
       } else {
         setSelectedBookTitle('');
       }
+
+      // Réinitialiser la recherche lors du changement de catégorie
+      setSearchTerm('');
+      setIsSearchActive(false);
 
       // Sauvegarder le dernier état mukhtarat
       localStorage.setItem('lastMukhtaratCategory', bookName);
@@ -254,13 +260,17 @@ function AppContent() {
     console.timeEnd('Mukhtarat State Restoration');
   }, [mukhtaratBookNames]);
 
-  // Fonction pour afficher toutes les mukhtarat (menu option "الكل")
+  // Fonction pour afficher toutes les mukhtarat
   const showAllMukhtarat = useCallback(() => {
     console.log('🏠 Retour à toutes les mukhtarat');
     setSelectedCategory('mukhtarat');
     setMukhtaratViewMode('all');
     setSelectedBookTitle('');
     setCurrentQuoteIndex(0);
+    
+    // Réinitialiser la recherche
+    setSearchTerm('');
+    setIsSearchActive(false);
     
     // Sauvegarder le nouvel état
     localStorage.setItem('lastMukhtaratCategory', 'mukhtarat');
@@ -269,7 +279,7 @@ function AppContent() {
     localStorage.setItem('lastMukhtaratBookTitle', '');
   }, []);
 
-  // Fonction pour aller à la dernière page consultée (menu option "آخر تصفح")
+  // Fonction pour aller à la dernière page consultée
   const goToLastVisitedPage = useCallback(() => {
     const lastPage = localStorage.getItem('lastMukhtaratIndex');
     if (lastPage) {
@@ -279,15 +289,15 @@ function AppContent() {
     }
   }, []);
 
-  // Fonction pour ouvrir MukhtaratPage (menu option "اختر كتابا")
+  // Fonction pour ouvrir MukhtaratPage
   const openMukhtaratPage = useCallback(() => {
     setShowMukhtaratPage(true);
     console.log('🔍 Ouverture de MukhtaratPage');
   }, []);
 
-  // Charger dynamiquement les book_names au démarrage (optimisé)
+  // Charger dynamiquement les book_names au démarrage
   useEffect(() => {
-    if (bookNamesLoaded) return; // Éviter les rechargements multiples
+    if (bookNamesLoaded) return;
     
     async function loadMukhtaratBookNames() {
       try {
@@ -301,7 +311,7 @@ function AppContent() {
         if (!error && data) {
           const bookNames = data.map(item => item.book_name);
           setMukhtaratBookNames(bookNames);
-          setBookNamesLoaded(true); // Marquer comme chargé
+          setBookNamesLoaded(true);
           console.timeEnd('Loading Book Names');
           console.log('📚 Book names chargés:', bookNames.length, 'items');
         }
@@ -315,7 +325,6 @@ function AppContent() {
 
   // Sauvegarder l'état mukhtarat de manière optimisée
   useEffect(() => {
-    // Débounce pour éviter les sauvegardes trop fréquentes
     const timeoutId = setTimeout(() => {
       saveMukhtaratState();
     }, 300);
@@ -326,11 +335,9 @@ function AppContent() {
   // Charger l'index de bookmark avec cache optimisé
   useEffect(() => {
     async function loadBookmarkIndex() {
-      // Vérifier le cache d'abord
       if (bookmarkCache.has(selectedCategory)) {
         const cachedIndex = bookmarkCache.get(selectedCategory)!;
         setCurrentQuoteIndex(cachedIndex);
-        console.log(`📖 Bookmark depuis cache pour ${selectedCategory}: index ${cachedIndex}`);
         return;
       }
       
@@ -338,16 +345,14 @@ function AppContent() {
       const index = await getSavedPageIndex(selectedCategory);
       const validIndex = index ?? 0;
       
-      // Mettre en cache
       setBookmarkCache(prev => new Map(prev.set(selectedCategory, validIndex)));
       setCurrentQuoteIndex(validIndex);
       
       console.timeEnd(`Bookmark Load ${selectedCategory}`);
-      console.log(`📖 Bookmark chargé pour ${selectedCategory}: index ${validIndex}`);
     }
 
     loadBookmarkIndex();
-  }, [selectedCategory]);
+  }, [selectedCategory, bookmarkCache]);
 
   // Effet pour les raccourcis clavier
   useEffect(() => {
@@ -377,16 +382,13 @@ function AppContent() {
           }
           break;
         case '1':
-          setSelectedCategory('daily');
-          setCurrentCategoryFilter('');
+          handleCategoryChange('daily');
           break;
         case '2':
-          setSelectedCategory('all');
-          setCurrentCategoryFilter('');
+          handleCategoryChange('all');
           break;
         case '3':
-          setSelectedCategory('favorites');
-          setCurrentCategoryFilter('');
+          handleCategoryChange('favorites');
           break;
       }
     };
@@ -395,11 +397,24 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation, isMenuOpen]);
 
-  // Effet optimisé pour filtrer les citations avec memoization
+  // NOUVELLE fonction pour gérer la recherche
+  const handleSearch = useCallback((term: string) => {
+    console.log('🔍 Recherche pour:', term);
+    setSearchTerm(term);
+    setIsSearchActive(term.trim() !== '');
+    
+    // Réinitialiser l'index si on fait une nouvelle recherche
+    if (term.trim() !== '') {
+      setCurrentQuoteIndex(0);
+    }
+  }, []);
+
+  // Effet OPTIMISÉ pour filtrer les citations avec recherche
   const filteredQuotesMemo = useMemo(() => {
     console.time('Filter Quotes Calculation');
     let newFilteredQuotes: Quote[] = [];
 
+    // Étape 1: Filtrage par catégorie (LOGIQUE ORIGINALE PRÉSERVÉE)
     if (selectedCategory === 'daily') {
       newFilteredQuotes = [...dailyQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
     } 
@@ -412,59 +427,67 @@ function AppContent() {
     else if (selectedCategory === 'favorites') {
       const favoriteQuotes = quotes.filter(quote => quote.isFavorite);
       newFilteredQuotes = [...favoriteQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
-      console.log(`📊 Favoris trouvés: ${newFilteredQuotes.length} (triés par ordre)`);
     }
     else if (selectedCategory === 'mukhtarat') {
-      // Afficher TOUTES les mukhtarat mélangées (mode 'all')
+      // Mode 'all' - toutes les mukhtarat mélangées
       const mukhtaratQuotes = quotes.filter(quote => mukhtaratBookNames.includes(quote.category));
       newFilteredQuotes = [...mukhtaratQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
-      console.log(`📚 Toutes les mukhtarat: ${newFilteredQuotes.length} quotes`);
     }
     else if (mukhtaratBookNames.includes(selectedCategory)) {
-      // Afficher une sous-catégorie spécifique (mode 'subcategory')
+      // Mode 'subcategory' - une sous-catégorie spécifique
       const categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
       newFilteredQuotes = [...categoryQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
-      console.log(`📖 Sous-catégorie ${selectedCategory}: ${newFilteredQuotes.length} quotes`);
     }
     else {
       const categoryQuotes = quotes.filter(quote => quote.category === selectedCategory);
       newFilteredQuotes = [...categoryQuotes].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
     }
 
-    console.timeEnd('Filter Quotes Calculation');
-    console.log(`🔍 Filtrage terminé pour ${selectedCategory}, mode: ${mukhtaratViewMode}, résultat: ${newFilteredQuotes.length} quotes`);
-    
-    return newFilteredQuotes;
-  }, [selectedCategory, mukhtaratViewMode, currentCategoryFilter, quotes, dailyQuotes, mukhtaratBookNames]);
+    // Étape 2: Filtrage par recherche UNIQUEMENT si on a un terme de recherche
+    if (isSearchActive && searchTerm.trim() !== '') {
+      // RESTRICTION: Recherche seulement dans les catégories mukhtarat
+      if (isSearchContext) {
+        newFilteredQuotes = newFilteredQuotes.filter(quote => 
+          arabicTextContains(quote.text || '', searchTerm)
+        );
+        console.log(`🔍 Recherche "${searchTerm}" dans ${selectedCategory}: ${newFilteredQuotes.length} résultats`);
+      } else {
+        console.log(`🚫 Recherche limitée aux catégories mukhtarat uniquement`);
+      }
+    }
 
-  // Utiliser le résultat mémorisé
+    console.timeEnd('Filter Quotes Calculation');
+    return newFilteredQuotes;
+  }, [
+    selectedCategory, 
+    currentCategoryFilter, 
+    quotes, 
+    dailyQuotes, 
+    mukhtaratBookNames, 
+    searchTerm,
+    isSearchActive,
+    isSearchContext
+  ]);
+
+  // Mettre à jour les citations filtrées
   useEffect(() => {
     setFilteredQuotes(filteredQuotesMemo);
   }, [filteredQuotesMemo]);
 
-  // Gestionnaire optimisé pour la recherche
-  const handleSearch = useCallback((results: Quote[]) => {
-    console.time('Search Results Processing');
-    setQuotesLoading(true);
-    
-    setSearchResults(results);
-    if (results.length > 0) {
-      const sortedResults = [...results].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
-      setFilteredQuotes(sortedResults);
-    } else {
-      // Restaurer les quotes selon le contexte actuel
-      setFilteredQuotes(filteredQuotesMemo);
+  // Ajuster l'index si nécessaire
+  useEffect(() => {
+    if (filteredQuotes.length > 0 && currentQuoteIndex >= filteredQuotes.length) {
+      setCurrentQuoteIndex(0);
     }
-    
-    setTimeout(() => {
-      setQuotesLoading(false);
-      console.timeEnd('Search Results Processing');
-    }, 100);
-  }, [filteredQuotesMemo]);
+  }, [filteredQuotes, currentQuoteIndex]);
 
   // Gestionnaire optimisé pour le changement de catégorie
   const handleCategoryChange = useCallback((category: string) => {
     console.time('Category Change');
+    
+    // Réinitialiser la recherche lors du changement de catégorie
+    setSearchTerm('');
+    setIsSearchActive(false);
     
     if (selectedCategory === 'all') {
       setCurrentCategoryFilter(category);
@@ -479,7 +502,6 @@ function AppContent() {
         setMukhtaratViewMode('all');
       }
     }
-    setSearchResults([]);
     setIsMenuOpen(false);
     setShowMukhtaratPage(false);
     
@@ -505,7 +527,7 @@ function AppContent() {
         return 'معراج الأرواح';
       case 'mukhtarat':
         const mukhtaratCount = quotes.filter(quote => mukhtaratBookNames.includes(quote.category)).length;
-        return ` عٌدَّة المريد (${mukhtaratCount})`;
+        return `عٌدَّة المريد (${mukhtaratCount})`;
       default:
         // Afficher le titre du livre sélectionné pour les sous-catégories mukhtarat
         if (mukhtaratBookNames.includes(categoryId) && selectedBookTitle) {
@@ -518,7 +540,7 @@ function AppContent() {
     }
   }, [quotes, mukhtaratBookNames, selectedBookTitle]);
 
-  // Header optimisé pour toutes les catégories
+  // Header optimisé
   const renderHeader = useCallback(() => (
     <div className={`${isSepiaMode ? 'bg-amber-50/80' : 'bg-white/80'} backdrop-blur-sm shadow-sm h-16 z-30 md:shadow-none`}>
       <div className="h-full flex items-center gap-4 px-4">
@@ -532,10 +554,10 @@ function AppContent() {
         
         <div className="flex-1 flex items-center gap-4 overflow-hidden">
           <h1 className="text-xl md:text-2xl font-bold font-arabic text-sky-600 whitespace-nowrap">
-            {searchResults.length > 0 ? 'نتيجة البحث' : getCategoryTitle(selectedCategory)}
+            {isSearchActive && searchTerm ? `نتيجة البحث: "${searchTerm}"` : getCategoryTitle(selectedCategory)}
           </h1>
           
-          {categoryManager.isMukhtaratSubCategory(selectedCategory) && (
+          {categoryManager.isMukhtaratSubCategory && categoryManager.isMukhtaratSubCategory(selectedCategory) && (
             <div className="flex items-center">
               <span className="text-xs font-medium px-2 py-1 rounded-md bg-sky-100 text-sky-600">
                 {filteredQuotes.length}
@@ -545,7 +567,7 @@ function AppContent() {
         </div>
       </div>
     </div>
-  ), [isSepiaMode, isMenuOpen, searchResults.length, getCategoryTitle, selectedCategory, filteredQuotes.length]);
+  ), [isSepiaMode, isMenuOpen, isSearchActive, searchTerm, getCategoryTitle, selectedCategory, filteredQuotes.length]);
 
   console.timeEnd('App Component Render');
 
@@ -581,6 +603,7 @@ function AppContent() {
             isOpen={true}
             onClose={() => {}}
             onShowSettings={() => setShowSettings(true)}
+            searchResultsCount={isSearchActive ? filteredQuotes.length : undefined}
           />
         </div>
 
@@ -604,6 +627,17 @@ function AppContent() {
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2 font-arabic">لا توجد مفضلة بعد</h3>
                   <p className="text-gray-500 mb-4 font-arabic">ابدأ بإضافة بعض الحكم المفضلة</p>
+                </div>
+              )}
+
+              {/* Message pour recherche sans résultats */}
+              {isSearchActive && filteredQuotes.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="text-gray-400 mb-4">
+                    <Search className="w-16 h-16 mx-auto" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2 font-arabic">لا توجد نتائج</h3>
+                  <p className="text-gray-500 mb-4 font-arabic">جرب كلمات أخرى للبحث</p>
                 </div>
               )}
 
@@ -650,6 +684,7 @@ function AppContent() {
                   onDelete={(id) => {
                     setDeleteConfirmation(id);
                   }}
+                  searchTerm={isSearchActive ? searchTerm : undefined}
                   // Passer le menu mukhtarat au QuoteViewer pour l'intégrer dans la navigation
                   renderExtraControls={isMukhtaratContext() ? () => (
                     <MukhtaratDropdownMenu
@@ -674,6 +709,7 @@ function AppContent() {
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
         onShowSettings={() => setShowSettings(true)}
+        searchResultsCount={isSearchActive ? filteredQuotes.length : undefined}
       />
 
       {/* Modals */}

@@ -1,8 +1,9 @@
-// QuoteCard.tsx modifié avec vérification supplémentaire
+// QuoteCard.tsx - Version avec surlignage des termes recherchés optimisé
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Heart, Share2, Trash2, Edit, PlayCircle, PauseCircle, Plus, Minus, X, Copy, StickyNote, ChevronDown, ChevronUp } from 'lucide-react';
 import { Quote } from '../types';
 import QuoteNoteEditor from './QuoteNoteEditor';
+import { highlightSearchTerm } from '../utils/arabic-search-utils';
 
 interface QuoteCardProps {
   quote: Quote;
@@ -10,19 +11,27 @@ interface QuoteCardProps {
   onDelete: (id: string) => void;
   onEdit: (quote: Quote) => void;
   onSwipe?: (direction: 'left' | 'right') => void;
+  searchTerm?: string; // Prop pour le terme de recherche
 }
 
 // Définition des tailles de police
 const FONT_SIZES = [
+  { name: 'text-lg', size: '1.125rem', lineHeight: '1.75rem' },
   { name: 'text-xl', size: '1.25rem', lineHeight: '2rem' },
-  { name: 'text-2xl', size: '1.5rem', lineHeight: '3rem' },
-  { name: 'text-3xl', size: '1.875rem', lineHeight: '3.5rem' },
-  { name: 'text-4xl', size: '2.25rem', lineHeight: '4rem' },
-  { name: 'text-5xl', size: '3.25rem', lineHeight: '5rem' },
+  { name: 'text-2xl', size: '1.5rem', lineHeight: '2.5rem' },
+  { name: 'text-3xl', size: '1.875rem', lineHeight: '3rem' },
+  { name: 'text-4xl', size: '2.25rem', lineHeight: '3.5rem' },
 ];
 
-export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavorite, onDelete, onEdit, onSwipe }) => {
-  // CORRECTION: Vérification initiale pour s'assurer que quote est bien défini
+export const QuoteCard: React.FC<QuoteCardProps> = memo(({ 
+  quote, 
+  onToggleFavorite, 
+  onDelete, 
+  onEdit, 
+  onSwipe, 
+  searchTerm 
+}) => {
+  // Vérification initiale pour s'assurer que quote est bien défini
   if (!quote || !quote.text) {
     return (
       <div className="relative bg-white rounded-xl shadow transition-all duration-200 p-6">
@@ -45,13 +54,13 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
   const [notesCount, setNotesCount] = useState(0);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   
-  // Utiliser un état pour l'index de taille de texte
-  const [textSizeIndex, setTextSizeIndex] = useState(2); // Commence à 1 = text-2xl
+  // État pour l'index de taille de texte
+  const [textSizeIndex, setTextSizeIndex] = useState(1); // Commence à text-xl
   
   const scrollSpeedRef = useRef(scrollSpeed);
   const controlsTimeoutRef = useRef<number | null>(null);
   
-  // Ajouter des refs pour le contrôle tactile amélioré
+  // Refs pour le contrôle tactile amélioré
   const lastTapTimeRef = useRef<number>(0);
   const isTouchActionRef = useRef<boolean>(false);
   
@@ -62,7 +71,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     scrollSpeedRef.current = scrollSpeed;
   }, [scrollSpeed]);
 
-  // Fonctions simplifiées pour modifier la taille du texte
+  // Fonctions pour modifier la taille du texte
   const increaseTextSize = useCallback(() => {
     setTextSizeIndex(prevIndex => 
       prevIndex < FONT_SIZES.length - 1 ? prevIndex + 1 : prevIndex
@@ -84,13 +93,8 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
       }
     };
 
-    // Vérifier après le rendu
     checkForScrollbar();
-    
-    // Vérifier également après le chargement complet de la page
     window.addEventListener('load', checkForScrollbar);
-    
-    // Et lors du redimensionnement de la fenêtre
     window.addEventListener('resize', checkForScrollbar);
 
     return () => {
@@ -122,7 +126,6 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
           el.scrollTop += intPixels;
         }
 
-        // Mettre à jour la progression
         if (maxScroll > 0) {
           setAutoScrollProgress((el.scrollTop / maxScroll) * 100);
         }
@@ -146,7 +149,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     return () => cancelAnimationFrame(animationFrameId);
   }, [isScrolling]);
 
-  // Gestion des contrôles améliorée avec contrôle tactile
+  // Gestion des contrôles avec contrôle tactile
   const showControlsTemporarily = useCallback(() => {
     setShowControls(true);
     
@@ -155,7 +158,6 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     }
     
     controlsTimeoutRef.current = window.setTimeout(() => {
-      // Ne pas cacher automatiquement les contrôles si on est en pause
       if (isScrolling) {
         setShowControls(false);
       }
@@ -163,14 +165,13 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     }, 5000);
   }, [isScrolling]);
 
-  // Nouvelle fonction pour gérer le comportement tactile amélioré
+  // Fonction pour gérer le comportement tactile
   const handleContentTap = useCallback(() => {
     if (!isReading) return;
     
     const now = Date.now();
     const timeSinceLastTap = now - lastTapTimeRef.current;
     
-    // Empêcher les actions secondaires dues à la propagation d'événements
     if (isTouchActionRef.current) {
       isTouchActionRef.current = false;
       return;
@@ -178,18 +179,14 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     
     // Double tap (moins de 300ms entre deux taps)
     if (timeSinceLastTap < 300) {
-      // Second tap - basculer l'état de lecture et cacher les contrôles
       if (showControls) {
         setIsScrolling(true);
         setShowControls(false);
       }
     } else {
-      // Premier tap - mettre en pause et montrer les contrôles
       setIsScrolling(false);
       setShowControls(true);
       
-      // Ne pas configurer de timeout pour masquer les contrôles - ils resteront
-      // visibles jusqu'au second tap
       if (controlsTimeoutRef.current) {
         window.clearTimeout(controlsTimeoutRef.current);
         controlsTimeoutRef.current = null;
@@ -201,7 +198,6 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
 
   // Gestionnaire d'événements pour les boutons de contrôle
   const handleControlButtonClick = useCallback(() => {
-    // Marquer qu'un bouton de contrôle a été cliqué pour éviter le basculement du mode lecture
     isTouchActionRef.current = true;
   }, []);
 
@@ -213,12 +209,12 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
 
   const increaseSpeedWithTracking = useCallback(() => {
     handleControlButtonClick();
-    increaseSpeed();
+    setScrollSpeed(s => Math.min(100, s + 10));
   }, [handleControlButtonClick]);
 
   const decreaseSpeedWithTracking = useCallback(() => {
     handleControlButtonClick();
-    decreaseSpeed();
+    setScrollSpeed(s => Math.max(10, s - 10));
   }, [handleControlButtonClick]);
 
   const increaseTextSizeWithTracking = useCallback(() => {
@@ -233,16 +229,10 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
 
   const exitReadingWithTracking = useCallback(() => {
     handleControlButtonClick();
-    exitReading();
-  }, [handleControlButtonClick]);
-
-  const increaseSpeed = () => setScrollSpeed(s => Math.min(100, s + 10));
-  const decreaseSpeed = () => setScrollSpeed(s => Math.max(10, s - 10));
-  const exitReading = () => {
     setIsReading(false);
     setIsScrolling(false);
     setShowControls(false);
-  };
+  }, [handleControlButtonClick]);
 
   // Partage et copie
   const handleShare = async () => {
@@ -287,11 +277,60 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
     lineHeight: FONT_SIZES[textSizeIndex].lineHeight
   };
 
+  // Préparation du texte avec surlignage si un terme de recherche est fourni
+  const renderQuoteText = () => {
+    const baseClassName = `leading-relaxed whitespace-pre-wrap ${isArabicText ? 'font-arabic' : 'font-sans'}`;
+    
+    if (!searchTerm || searchTerm.trim() === '') {
+      return (
+        <p
+          className={baseClassName}
+          style={textStyle}
+          dir={isArabicText ? 'rtl' : 'ltr'}
+        >
+          {quote.text}
+        </p>
+      );
+    }
+
+    // Utiliser la fonction de surlignage pour diviser le texte en segments
+    const segments = highlightSearchTerm(quote.text, searchTerm);
+
+    return (
+      <p
+        className={baseClassName}
+        style={textStyle}
+        dir={isArabicText ? 'rtl' : 'ltr'}
+      >
+        {segments.map((segment, index) => (
+          segment.isHighlighted ? (
+            <mark 
+              key={index} 
+              className="bg-yellow-200 text-yellow-900 rounded-sm px-1 py-0.5 font-medium"
+            >
+              {segment.text}
+            </mark>
+          ) : (
+            <React.Fragment key={index}>{segment.text}</React.Fragment>
+          )
+        ))}
+      </p>
+    );
+  };
+
   return (
     <div className="relative bg-white rounded-xl shadow transition-all duration-200">
       {/* Mode de lecture normal */}
       {!isReading ? (
         <div className="p-6">
+          {/* Indicateur de recherche si terme trouvé */}
+          {searchTerm && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span>Résultat de recherche pour: "{searchTerm}"</span>
+            </div>
+          )}
+
           {/* Bouton de lecture en haut à droite, visible uniquement s'il y a une barre de défilement */}
           {hasScrollbar && (
             <button
@@ -309,13 +348,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
           )}
 
           <div ref={contentScrollRef} className="max-h-[calc(100vh-12rem)] overflow-y-auto">
-            <p
-              className={`leading-relaxed whitespace-pre-wrap ${isArabicText ? 'font-arabic' : 'font-sans'}`}
-              style={textStyle}
-              dir={isArabicText ? 'rtl' : 'ltr'}
-            >
-              {quote.text}
-            </p>
+            {renderQuoteText()}
             {quote.source && (
               <p className="text-gray-500 mt-4 italic">
                 — {quote.source}
@@ -367,7 +400,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
             )}
           </div>
           
-          {/* Nouveau système de notes avec bouton */}
+          {/* Système de notes avec bouton */}
           {quote.isFavorite && (
             <div className="mt-4 notes-section">
               <button 
@@ -405,18 +438,14 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
             className="flex-1 overflow-y-auto px-6 py-8"
             onClick={handleContentTap}
           >
-            <p
-              className={`leading-relaxed whitespace-pre-wrap mx-auto max-w-3xl ${isArabicText ? 'font-arabic' : 'font-sans'}`}
-              style={textStyle}
-              dir={isArabicText ? 'rtl' : 'ltr'}
-            >
-              {quote.text}
-            </p>
-            {quote.source && (
-              <p className="text-gray-500 mt-8 max-w-3xl mx-auto italic">
-                — {quote.source}
-              </p>
-            )}
+            <div className="max-w-4xl mx-auto">
+              {renderQuoteText()}
+              {quote.source && (
+                <p className="text-gray-500 mt-8 italic text-center">
+                  — {quote.source}
+                </p>
+              )}
+            </div>
           </div>
           
           {/* Barre de progression */}
@@ -444,7 +473,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                     className="p-3 text-gray-600 hover:text-blue-600"
                     title="Diminuer la taille du texte"
                   >
-                    <Minus className="w-5 h-5" />
+                    <Minus className="w-4 h-4" />
                   </button>
                   <div className="flex items-center px-2">
                     <span className="text-sm font-medium text-gray-700">
@@ -456,7 +485,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({ quote, onToggleFavori
                     className="p-3 text-gray-600 hover:text-blue-600"
                     title="Augmenter la taille du texte"
                   >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
                 
