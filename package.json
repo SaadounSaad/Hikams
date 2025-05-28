@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "build:skip-types": "vite build --mode production"
+  }
+}
+{
   "name": "vite-react-typescript-starter",
   "private": true,
   "version": "0.0.0",

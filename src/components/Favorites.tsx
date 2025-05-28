@@ -17,11 +17,8 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'quotes' | 'books'>('all');
 
-  // Initialiser le service des favoris
-  const favoritesService = new FavoritesService(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-  );
+  // Initialiser le service des favoris - CORRECTION: Supprimer les paramètres
+  const favoritesService = new FavoritesService();
 
   // Charger les favoris
   const loadFavorites = async () => {
@@ -29,7 +26,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
     
     setLoading(true);
     try {
-      const result = await favoritesService.getFavorites(user.id);
+      const result = await favoritesService.getFavorites();
       setFavorites(result);
     } catch (error) {
       console.error('Erreur lors du chargement des favoris:', error);
@@ -93,7 +90,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
         </div>
       ) : (
         <>
-          <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+          <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'quotes' | 'books')}>
             <TabsList className="mb-6">
               <TabsTrigger value="all">
                 الكل ({totalFavorites})
@@ -122,7 +119,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
                     key={`${type}-${item.id}`}
                     item={item}
                     type={type}
-                    onRemove={() => removeFavorite(type, item.id)}
+                    onRemove={() => removeFavorite(type, String(item.id))} // CORRECTION: Convertir en string
                     onSelect={() => onSelectItem?.(item, type)}
                   />
                 ))
@@ -136,7 +133,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
                   key={`quote-${quote.id}`}
                   item={quote}
                   type="quote"
-                  onRemove={() => removeFavorite('quote', quote.id)}
+                  onRemove={() => removeFavorite('quote', String(quote.id))} // CORRECTION: Convertir en string
                   onSelect={() => onSelectItem?.(quote, 'quote')}
                 />
               ))}
@@ -149,7 +146,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onSelectItem }) => {
                   key={`book-${entry.id}`}
                   item={entry}
                   type="book-entry"
-                  onRemove={() => removeFavorite('book-entry', entry.id)}
+                  onRemove={() => removeFavorite('book-entry', String(entry.id))} // CORRECTION: Convertir en string
                   onSelect={() => onSelectItem?.(entry, 'book-entry')}
                 />
               ))}

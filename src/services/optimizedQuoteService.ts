@@ -163,7 +163,11 @@ class OptimizedQuoteService {
       const storedCache = localStorage.getItem(CACHE_KEY);
       if (storedCache) {
         this.cache = JSON.parse(storedCache);
-        console.log('📚 Cache chargé depuis localStorage, quotes:', this.cache.quotes.length);
+        if (this.cache && this.cache.quotes) {
+          console.log('📚 Cache chargé depuis localStorage, quotes:', this.cache.quotes.length);
+        } else {
+          console.log('📚 Cache chargé depuis localStorage, mais aucune quote trouvée.');
+        }
       }
     } catch (error) {
       console.warn('⚠️ Erreur lors du chargement du cache:', error);

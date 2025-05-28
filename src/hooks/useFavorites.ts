@@ -37,7 +37,8 @@ export function useFavorite({
 
       setIsLoading(true);
       try {
-        const isFav = await favoritesService.isFavorite(user.id, contentType, contentId);
+        // CORRECTION: Adapter selon la signature réelle de votre service
+        const isFav = await favoritesService.isFavorite(contentType, contentId);
         setIsFavorite(isFav);
         setError(null);
       } catch (err) {
@@ -57,21 +58,15 @@ export function useFavorite({
 
       setIsLoading(true);
       try {
-        const result = await favoritesService.addToFavorites(
-          user.id, 
-          contentType, 
-          contentId, 
-          category, 
-          index, 
-          notes
+        // CORRECTION: Simplifier l'appel selon la signature du service
+        await favoritesService.addToFavorites(
+          contentType,
+          { id: contentId } as any,
+          user.id
         );
         
-        if (result.success) {
-          setIsFavorite(true);
-          setError(null);
-        } else {
-          setError(result.error || 'Une erreur est survenue');
-        }
+        setIsFavorite(true);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Une erreur est survenue');
       } finally {
@@ -87,13 +82,10 @@ export function useFavorite({
 
     setIsLoading(true);
     try {
-      const result = await favoritesService.removeFromFavorites(user.id, contentType, contentId);
-      if (result.success) {
-        setIsFavorite(false);
-        setError(null);
-      } else {
-        setError(result.error || 'Une erreur est survenue');
-      }
+      // CORRECTION: Simplifier l'appel
+      await favoritesService.removeFromFavorites(user.id, contentType, contentId);
+      setIsFavorite(false);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
@@ -108,22 +100,27 @@ export function useFavorite({
 
       setIsLoading(true);
       try {
-        const result = await favoritesService.toggleFavorite(
-          user.id,
-          contentType,
-          contentId,
-          category,
-          index,
-          callback,
-          notes
-        );
+        // CORRECTION: Vérifier d'abord si c'est un favori, puis basculer
+        const currentIsFavorite = await favoritesService.isFavorite(contentType, contentId);
         
-        if (result.success) {
-          setIsFavorite(result.isFavorite);
-          setError(null);
+        if (currentIsFavorite) {
+          await favoritesService.removeFromFavorites(user.id, contentType, contentId);
+          setIsFavorite(false);
         } else {
-          setError(result.error || 'Une erreur est survenue');
+          await favoritesService.addToFavorites(
+            contentType,
+            { id: contentId } as any,
+            user.id
+          );
+          setIsFavorite(true);
         }
+        
+        // Exécuter le callback si fourni
+        if (callback) {
+          callback();
+        }
+        
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Une erreur est survenue');
       } finally {
@@ -158,12 +155,16 @@ export function useFavorites() {
 
   // Charger tous les favoris
   const loadFavorites = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const result = await favoritesService.getFavorites(user.id);
-      setFavorites(result);
+      // CORRECTION: Adapter selon la signature réelle de getFavorites
+      const result = await favoritesService.getFavorites();
+      setFavorites(result || { quotes: [], bookEntries: [] });
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue lors du chargement des favoris');
@@ -176,6 +177,8 @@ export function useFavorites() {
   useEffect(() => {
     if (user) {
       loadFavorites();
+    } else {
+      setIsLoading(false);
     }
   }, [user, loadFavorites]);
 

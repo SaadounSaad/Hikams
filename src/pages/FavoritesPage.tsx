@@ -42,7 +42,14 @@ const FavoritesPage: React.FC = () => {
     setSelectedBookEntry(null);
   };
 
-  const totalFavorites = favorites.quotes.length + favorites.bookEntries.length;
+  // CORRECTION: favorites est un array de BookFavorite, pas un objet
+  const favoritesArray = Array.isArray(favorites) ? favorites : [];
+  
+  // Séparer les quotes et bookEntries depuis l'array
+  const quotesArray = favoritesArray.filter((item: any) => item.type === 'quote' || !item.book_title) || [];
+  const bookEntriesArray = favoritesArray.filter((item: any) => item.type === 'book-entry' || item.book_title) || [];
+  
+  const totalFavorites = favoritesArray.length;
 
   // Si un élément est sélectionné, afficher ses détails
   if (selectedQuote) {
@@ -65,7 +72,7 @@ const FavoritesPage: React.FC = () => {
               )}
             </div>
             <FavoriteButton 
-              contentId={selectedQuote.id}
+              contentId={String(selectedQuote.id)} // CORRECTION: Convertir en string
               contentType="quote"
               initialIsFavorite={selectedQuote.is_favorite}
               size="md"
@@ -113,7 +120,7 @@ const FavoritesPage: React.FC = () => {
               </div>
             </div>
             <FavoriteButton 
-              contentId={selectedBookEntry.id}
+              contentId={String(selectedBookEntry.id)} // CORRECTION: Convertir en string
               contentType="book-entry"
               size="md"
             />
@@ -168,7 +175,7 @@ const FavoritesPage: React.FC = () => {
               onClick={() => setActiveTab('quotes')}
             >
               <QuoteIcon className="h-4 w-4 ml-1" />
-              الاقتباسات ({favorites.quotes.length})
+              الاقتباسات ({quotesArray.length}) {/* CORRECTION: Utiliser la longueur filtrée */}
             </button>
             <button
               className={`flex items-center px-4 py-2 ${
@@ -179,15 +186,19 @@ const FavoritesPage: React.FC = () => {
               onClick={() => setActiveTab('books')}
             >
               <BookOpen className="h-4 w-4 ml-1" />
-              الكتب ({favorites.bookEntries.length})
+              الكتب ({bookEntriesArray.length}) {/* CORRECTION: Utiliser la longueur filtrée */}
             </button>
           </div>
 
           {/* Content for All tab */}
           {activeTab === 'all' && (
             <div className="space-y-6">
-              {[...favorites.quotes.map(q => ({ type: 'quote' as const, item: q })),
-                ...favorites.bookEntries.map(b => ({ type: 'book-entry' as const, item: b }))]
+              {/* CORRECTION: Utiliser l'array de favoris complet */}
+              {favoritesArray
+                .map((item: any) => ({
+                  type: item.book_title ? 'book-entry' as 'book-entry' : 'quote' as 'quote',
+                  item: item
+                }))
                 .sort((a, b) => {
                   const dateA = new Date(a.item.createdAt || '');
                   const dateB = new Date(b.item.createdAt || '');
@@ -207,10 +218,10 @@ const FavoritesPage: React.FC = () => {
           {/* Content for Quotes tab */}
           {activeTab === 'quotes' && (
             <div className="space-y-6">
-              {favorites.quotes.length === 0 ? (
+              {quotesArray.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">لا توجد اقتباسات في المفضلة</p>
               ) : (
-                favorites.quotes.map(quote => (
+                quotesArray.map((quote: any) => (
                   <FavoriteCard 
                     key={`quote-${quote.id}`} 
                     item={quote} 
@@ -225,10 +236,10 @@ const FavoritesPage: React.FC = () => {
           {/* Content for Books tab */}
           {activeTab === 'books' && (
             <div className="space-y-6">
-              {favorites.bookEntries.length === 0 ? (
+              {bookEntriesArray.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">لا توجد مقتطفات كتب في المفضلة</p>
               ) : (
-                favorites.bookEntries.map(bookEntry => (
+                bookEntriesArray.map((bookEntry: any) => (
                   <FavoriteCard 
                     key={`book-${bookEntry.id}`} 
                     item={bookEntry} 
@@ -287,7 +298,7 @@ const FavoriteCard: React.FC<FavoriteCardProps> = ({ item, type, onSelect }) => 
           </div>
         </div>
         <FavoriteButton 
-          contentId={item.id}
+          contentId={String(item.id)} // CORRECTION: Convertir en string
           contentType={type}
           initialIsFavorite={isQuote ? quote?.is_favorite : undefined}
           onToggleComplete={() => refreshFavorites()}
