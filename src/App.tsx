@@ -66,7 +66,13 @@ const MukhtaratDropdownMenu = ({
 
       {isOpen && (
         <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
-          
+          <button
+            onClick={() => handleOptionClick(onGoToLastPage)}
+            className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-gray-50 transition-colors border-b border-gray-100"
+          >
+            <Search className="w-4 h-4 text-green-600" />
+            <span className="font-arabic text-gray-700">آخر تصفح</span>
+          </button>
 
           <button
             onClick={() => handleOptionClick(onShowMukhtaratPage)}

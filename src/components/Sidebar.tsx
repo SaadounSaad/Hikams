@@ -1,8 +1,7 @@
-// Sidebar.tsx - Version avec recherche vocale en arabe
+// Sidebar.tsx - Version avec recherche arabe optimisée
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Calendar, Heart, SortDesc, Settings, LogOut, Star, X, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { VoiceSearchButton } from './VoiceSearchButton';
 
 interface SidebarProps {
   selectedCategory: string;
@@ -27,7 +26,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { logout } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [voiceSearchActive, setVoiceSearchActive] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Vérifier si on est dans une catégorie qui supporte la recherche
@@ -63,7 +61,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleClearSearch = () => {
     setSearchTerm('');
     onSearch('');
-    setVoiceSearchActive(false);
     // Focus sur l'input après effacement
     if (searchInputRef.current) {
       searchInputRef.current.focus();
@@ -80,26 +77,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
     
     setSearchTerm(value);
-    setVoiceSearchActive(false); // Désactiver l'indicateur vocal si on tape
-  };
-
-  // Gérer le résultat de la recherche vocale
-  const handleVoiceResult = (transcript: string) => {
-    console.log('🎤 Transcription reçue dans Sidebar:', transcript);
-    setSearchTerm(transcript);
-    setVoiceSearchActive(true);
-    
-    // Animation feedback
-    if (searchInputRef.current) {
-      searchInputRef.current.focus();
-      // Effet visuel pour montrer que la recherche vocale a fonctionné
-      searchInputRef.current.style.borderColor = '#10B981';
-      setTimeout(() => {
-        if (searchInputRef.current) {
-          searchInputRef.current.style.borderColor = '';
-        }
-      }, 1000);
-    }
   };
 
   // Catégories principales
@@ -139,9 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onChange={handleSearchChange}
                   placeholder="بحث في عدة المريد..."
                   dir="rtl"
-                  className={`w-full pl-12 pr-4 py-2 bg-gray-50/80 border rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm font-arabic transition-all duration-200 ${
-                    voiceSearchActive ? 'border-green-400 bg-green-50' : 'border-gray-200'
-                  }`}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-50/80 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm font-arabic transition-colors"
                 />
                 
                 {/* Icône de recherche ou spinner */}
@@ -151,15 +126,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ) : (
                     <Search className="w-5 h-5 text-gray-400" />
                   )}
-                </div>
-                
-                {/* Bouton de recherche vocale */}
-                <div className="absolute left-8 top-1/2 transform -translate-y-1/2">
-                  <VoiceSearchButton 
-                    onVoiceResult={handleVoiceResult}
-                    disabled={!isSearchEnabled}
-                    className="scale-90"
-                  />
                 </div>
                 
                 {/* Bouton X pour effacer la recherche */}
@@ -172,42 +138,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <X className="w-4 h-4" />
                   </button>
                 )}
-                
-                {/* Indicateur de recherche vocale active */}
-                {voiceSearchActive && (
-                  <div className="absolute right-8 top-1/2 transform -translate-y-1/2">
-                    <div className="flex items-center gap-1 text-green-600">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs font-arabic">صوتي</span>
-                    </div>
-                  </div>
-                )}
               </div>
               
               {/* Affichage du nombre de résultats */}
               {!!searchTerm && typeof searchResultsCount !== 'undefined' && (
                 <div className="mt-2 text-center text-xs font-arabic">
                   {searchResultsCount > 0 ? (
-                    <span className={`px-2 py-1 rounded-full ${
-                      voiceSearchActive 
-                        ? 'text-green-600 bg-green-50' 
-                        : 'text-blue-600 bg-blue-50'
-                    }`}>
+                    <span className="text-green-600 bg-green-50 px-2 py-1 rounded-full">
                       {searchResultsCount} نتيجة
-                      {voiceSearchActive && ' 🎤'}
                     </span>
                   ) : (
                     <span className="text-red-500 bg-red-50 px-2 py-1 rounded-full">
                       لا توجد نتائج
                     </span>
                   )}
-                </div>
-              )}
-
-              {/* Conseil pour la recherche vocale */}
-              {!searchTerm && (
-                <div className="mt-2 text-xs text-gray-500 font-arabic text-center">
-                  💡 يمكنك استخدام البحث الصوتي
                 </div>
               )}
             </div>
@@ -238,9 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   
                   {/* Indicateur de recherche active */}
                   {category.id === 'mukhtarat' && !!searchTerm && (
-                    <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
-                      voiceSearchActive ? 'bg-green-500' : 'bg-blue-500'
-                    }`}></div>
+                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></div>
                   )}
                 </button>
               )
