@@ -55,7 +55,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   
   // État pour l'index de taille de texte
-  const [textSizeIndex, setTextSizeIndex] = useState(1); // Commence à text-xl
+  const [textSizeIndex, setTextSizeIndex] = useState(2); // Commence à text-xl
   
   const scrollSpeedRef = useRef(scrollSpeed);
   const controlsTimeoutRef = useRef<number | null>(null);
@@ -361,7 +361,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
               <button 
                 onClick={() => onToggleFavorite(quote.id)} 
                 title="Favori" 
-                className={`p-2 rounded-full transition-colors ${
+                className={`p-1 rounded-full transition-colors ${
                   quote.isFavorite ? 'text-red-500 bg-red-50' : 'text-gray-500 hover:bg-gray-50'
                 }`}
               >
@@ -371,7 +371,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
               <button 
                 onClick={handleShare} 
                 title="Partager" 
-                className="p-2 rounded-full text-gray-500 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                className="p-1 rounded-full text-gray-500 hover:text-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <Share2 className="w-5 h-5" />
               </button>
@@ -379,7 +379,7 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
               <button 
                 onClick={() => onEdit(quote)} 
                 title="Modifier" 
-                className="p-2 rounded-full text-gray-500 hover:text-green-500 hover:bg-green-50 transition-colors"
+                className="p-1 rounded-full text-gray-500 hover:text-green-500 hover:bg-green-50 transition-colors"
               >
                 <Edit className="w-5 h-5" />
               </button>
@@ -387,12 +387,36 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
               <button 
                 onClick={() => onDelete(quote.id)} 
                 title="Supprimer" 
-                className="p-2 rounded-full text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
+                className="p-1 rounded-full text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
               >
                 <Trash2 className="w-5 h-5" />
               </button>
+              
+              <button 
+                                    onClick={decreaseTextSizeWithTracking} 
+                    className="p-1 text-gray-600 hover:text-blue-600"
+                    title="Diminuer la taille du texte"
+                  >
+                    <Minus className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center px-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
+                    </span>
+                  </div>
+
+              <button 
+                  
+                    onClick={increaseTextSizeWithTracking} 
+                    className="p-1 text-gray-600 hover:text-blue-600"
+                    title="Augmenter la taille du texte"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+
             </div>
-            
+                   
             {showCopiedMessage && (
               <span className="absolute bottom-2 right-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
                 Copié !
