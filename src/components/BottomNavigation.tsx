@@ -1,6 +1,6 @@
 // BottomNavigation.tsx - Menu de navigation en bas auto-masqué avec indicateur
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp, HandHelping, BookOpen } from 'lucide-react';
+import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // Composant indicateur d'aide
@@ -172,14 +172,15 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     }
     setSearchTerm(value);
   };
-// Catégories principales pour navigation rapide
-  const quickCategories = [
-    { id: 'miraj-arwah', name: 'الورد', icon: <HandHelping className="w-5 h-5" /> },
 
+  // Catégories principales pour navigation rapide
+  const quickCategories = [
+    { id: 'daily', name: 'اليوم', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'mukhtarat', name: 'المريد', icon: <Star className="w-5 h-5" /> },
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'المكتبة', icon: <BookOpen className="w-5 h-5" /> },
-    { id: 'daily', name: 'اليومية', icon: <Calendar className="w-5 h-5" /> }
+    { id: 'miraj-arwah', name: 'الأرواح', icon: <Star className="w-5 h-5" /> }
   ];
+
   // Auto-masquage lors du scroll
   useEffect(() => {
     let ticking = false;
@@ -324,22 +325,22 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
   return (
     <>
-      {/* Zone de détection invisible en bas d'écran */}
-      <div 
-        className="fixed bottom-0 left-0 right-0 h-20 pointer-events-auto z-30"
-        onMouseEnter={() => showMenuTemporarily()}
-        onTouchStart={() => showMenuTemporarily()}
-        style={{ 
-          background: 'transparent',
-          display: isHidden ? 'block' : 'none' 
-        }}
-      />
-
-      {/* Indicateur d'aide pour révéler le menu */}
-      <MenuHintIndicator
-        isMenuVisible={!isHidden}
-        onTrigger={showMenuTemporarily}
-      />
+      {/* Bouton transparent permanent pour révéler le menu */}
+      {isHidden && (
+        <div className="fixed bottom-1 left-0 right-0 z-40 flex justify-center">
+          <button
+            onClick={() => showMenuTemporarily()}
+            className="w-32 h-1 bg-gray-900/30 rounded-full
+                       hover:bg-gray-900/40 hover:h-1.5 hover:w-36
+                       active:scale-95 transition-all duration-200"
+            aria-label="إظهار القائمة"
+            style={{
+              // Zone de sécurité pour iPhone
+              marginBottom: 'max(4px, env(safe-area-inset-bottom))'
+            }}
+          />
+        </div>
+      )}
 
       {/* Overlay pour le menu étendu */}
       {isExpanded && (
@@ -355,7 +356,6 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           isHidden ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'
         }`}
         onMouseEnter={() => showMenuTemporarily()}
-        onTouchStart={() => showMenuTemporarily()}
       >
         {/* Navigation rapide */}
         <div className="flex items-center justify-between px-4 py-2">
