@@ -81,9 +81,52 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   const [hideTimer, setHideTimer] = useState<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
-  // Vérifier si on est dans une catégorie qui supporte la recherche
-  const isSearchEnabled: boolean = selectedCategory === 'mukhtarat' || 
-    (!!selectedCategory && selectedCategory.includes('mukhtarat'));
+  // Fonction centralisée pour gérer l'affichage temporaire du menu
+  const showMenuTemporarily = useCallback(() => {
+    console.log('🔍 showMenuTemporarily called - isExpanded:', isExpanded);
+    setIsHidden(false);
+    setUserInteracted(true);
+    
+    // Nettoyer le timer précédent
+    if (hideTimeoutRef.current) {
+      console.log('⏰ Clearing existing timer');
+      clearTimeout(hideTimeoutRef.current);
+    }
+    
+    // Démarrer un nouveau timer seulement si le menu n'est pas étendu
+    if (!isExpanded) {
+      console.log('⏱️ Starting new hide timer (3s)');
+      hideTimeoutRef.current = setTimeout(() => {
+        console.log('⏰ Timer expired - hiding menu');
+        setIsHidden(true);
+        hideTimeoutRef.current = null;
+      }, 3000);
+    } else {
+      console.log('🚫 Menu expanded - no timer started');
+    }
+  }, [isExpanded]);
+
+  // Fonction pour annuler le timer de masquage
+  const cancelHideTimer = useCallback(() => {
+    if (hideTimeoutRef.current) {
+      console.log('❌ Canceling hide timer');
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Fonction pour démarrer le timer de masquage
+  const startHideTimer = useCallback(() => {
+    cancelHideTimer();
+    if (!isExpanded) {
+      console.log('🔄 Starting delayed hide timer (3s)');
+      hideTimeoutRef.current = setTimeout(() => {
+        console.log('⏰ Delayed timer expired - hiding menu');
+        setIsHidden(true);
+        hideTimeoutRef.current = null;
+      }, 3000);
+    }
+  }, [isExpanded, cancelHideTimer]);
 
   // Fonction pour afficher temporairement le menu
   const showMenuTemporarily = useCallback(() => {
@@ -104,7 +147,11 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     setHideTimer(timer);
   }, [hideTimer, isExpanded]);
 
-  // Auto-masquage lors du scroll avec logique améliorée
+  // Vérifier si on est dans une catégorie qui supporte la recherche
+  const isSearchEnabled: boolean = selectedCategory === 'mukhtarat' || 
+    (!!selectedCategory && selectedCategory.includes('mukhtarat'));
+
+  // Auto-masquage lors du scroll
   useEffect(() => {
     let ticking = false;
     
@@ -115,16 +162,12 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           
           // Afficher le menu si on scroll vers le haut ou si on est en haut de page
           if (currentScrollY < lastScrollY || currentScrollY < 10) {
-            setIsHidden(false);
-            setUserInteracted(true);
+            showMenuTemporarily();
           } 
           // Masquer le menu si on scroll vers le bas (sauf si menu étendu ouvert)
           else if (currentScrollY > lastScrollY && currentScrollY > 50 && !isExpanded) {
             setIsHidden(true);
-            if (hideTimer) {
-              clearTimeout(hideTimer);
-              setHideTimer(null);
-            }
+            cancelHideTimer();
           }
           
           setLastScrollY(currentScrollY);
@@ -136,15 +179,14 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY, isExpanded, hideTimer]);
+  }, [lastScrollY, isExpanded, showMenuTemporarily, cancelHideTimer]);
 
   // Détection des interactions tactiles/souris - SIMPLIFIÉ
   useEffect(() => {
     if (userInteracted) return; // Éviter les re-renders inutiles
     
     const handleInteraction = () => {
-      setIsHidden(false);
-      setUserInteracted(true);
+      showMenuTemporarily();
     };
 
     // Afficher le menu lors des premières interactions
@@ -158,87 +200,64 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
         document.removeEventListener(event, handleInteraction);
       });
     };
-  }, [userInteracted]);
+  }, [userInteracted, showMenuTemporarily]);
 
-  // Afficher le menu quand on survole la zone en bas - OPTIMISÉ
+  // Afficher le menu quand on survole la zone en bas
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
     const handleMouseMove = (e: MouseEvent) => {
       const windowHeight = window.innerHeight;
       const mouseY = e.clientY;
       
       // Si la souris est dans les 80px du bas de l'écran
       if (mouseY > windowHeight - 80) {
-        setIsHidden(false);
-        setUserInteracted(true);
-        
-        // Démarrer le timer de masquage
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          if (!isExpanded) {
-            setIsHidden(true);
-          }
-        }, 3000);
+        showMenuTemporarily();
       }
     };
 
     document.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      clearTimeout(timeoutId);
     };
-  }, [isExpanded]);
+  }, [showMenuTemporarily]);
 
-  // Afficher le menu lors du toucher en bas d'écran - OPTIMISÉ
+  // Afficher le menu lors du toucher en bas d'écran
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
     const handleTouchStart = (e: TouchEvent) => {
       const windowHeight = window.innerHeight;
       const touchY = e.touches[0].clientY;
       
       // Si le toucher est dans les 100px du bas de l'écran
       if (touchY > windowHeight - 100) {
-        setIsHidden(false);
-        setUserInteracted(true);
-        
-        // Démarrer le timer de masquage
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          if (!isExpanded) {
-            setIsHidden(true);
-          }
-        }, 3000);
+        showMenuTemporarily();
       }
     };
 
     document.addEventListener('touchstart', handleTouchStart, { passive: true });
     return () => {
       document.removeEventListener('touchstart', handleTouchStart);
-      clearTimeout(timeoutId);
     };
-  }, [isExpanded]);
+  }, [showMenuTemporarily]);
 
-  // Gestion du menu étendu - SIMPLIFIÉ
+  // Gestion du menu étendu
   useEffect(() => {
     if (isExpanded) {
       // Garder le menu visible quand il est étendu
       setIsHidden(false);
-      if (hideTimer) {
-        clearTimeout(hideTimer);
-        setHideTimer(null);
+      cancelHideTimer();
+    } else {
+      // Redémarrer le timer quand le menu se ferme
+      if (userInteracted && !isHidden) {
+        startHideTimer();
       }
     }
-  }, [isExpanded, hideTimer]);
+  }, [isExpanded, userInteracted, isHidden, cancelHideTimer, startHideTimer]);
 
-  // Gestion des touches de navigation - SIMPLIFIÉ
+  // Gestion des touches de navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Afficher le menu lors de l'utilisation du clavier
       if (['1', '2', '3', '4', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-        setIsHidden(false);
-        setUserInteracted(true);
+        showMenuTemporarily();
       }
       
       // Fermer le menu étendu avec Escape
@@ -271,16 +290,16 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isExpanded, onCategoryChange]);
+  }, [isExpanded, onCategoryChange, showMenuTemporarily]);
 
-  // Nettoyage des timers
+  // Nettoyage des timers au démontage
   useEffect(() => {
     return () => {
-      if (hideTimer) {
-        clearTimeout(hideTimer);
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
       }
     };
-  }, [hideTimer]);
+  }, []);
 
   // Auto-fermeture du menu étendu après inactivité
   useEffect(() => {
@@ -347,14 +366,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       {/* Zone de détection invisible en bas d'écran */}
       <div 
         className="fixed bottom-0 left-0 right-0 h-20 pointer-events-auto z-30"
-        onMouseEnter={() => {
-          setIsHidden(false);
-          setUserInteracted(true);
-        }}
-        onTouchStart={() => {
-          setIsHidden(false);
-          setUserInteracted(true);
-        }}
+        onMouseEnter={() => showMenuTemporarily()}
+        onTouchStart={() => showMenuTemporarily()}
         style={{ 
           background: 'transparent',
           display: isHidden ? 'block' : 'none' 
@@ -364,10 +377,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       {/* Indicateur d'aide pour révéler le menu */}
       <MenuHintIndicator
         isMenuVisible={!isHidden}
-        onTrigger={() => {
-          setIsHidden(false);
-          setUserInteracted(true);
-        }}
+        onTrigger={showMenuTemporarily}
       />
 
       {/* Overlay pour le menu étendu */}
@@ -383,14 +393,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
         className={`fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-50 transition-all duration-300 ease-in-out ${
           isHidden ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'
         }`}
-        onMouseEnter={() => {
-          setIsHidden(false);
-          setUserInteracted(true);
-        }}
-        onTouchStart={() => {
-          setIsHidden(false);
-          setUserInteracted(true);
-        }}
+        onMouseEnter={() => showMenuTemporarily()}
+        onTouchStart={() => showMenuTemporarily()}
       >
         {/* Navigation rapide */}
         <div className="flex items-center justify-between px-4 py-2">
@@ -399,8 +403,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
               key={category.id}
               onClick={() => {
                 onCategoryChange(category.id);
-                setIsHidden(false);
-                setUserInteracted(true);
+                showMenuTemporarily();
               }}
               className={`nav-button flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200 ${
                 selectedCategory === category.id
@@ -424,8 +427,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           <button
             onClick={() => {
               setIsExpanded(!isExpanded);
-              setIsHidden(false);
-              setUserInteracted(true);
+              showMenuTemporarily();
             }}
             className="nav-button flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 transition-all duration-200 active:scale-95"
             aria-label={isExpanded ? 'إخفاء القائمة' : 'إظهار المزيد'}
