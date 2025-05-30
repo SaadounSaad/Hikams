@@ -1,6 +1,6 @@
 // BottomNavigation.tsx - Menu de navigation en bas auto-masqué avec indicateur
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp } from 'lucide-react';
+import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp, HandHelping, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // Composant indicateur d'aide
@@ -172,15 +172,14 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     }
     setSearchTerm(value);
   };
-
-  // Catégories principales pour navigation rapide
+// Catégories principales pour navigation rapide
   const quickCategories = [
-    { id: 'daily', name: 'اليوم', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'المريد', icon: <Star className="w-5 h-5" /> },
-    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
-    { id: 'miraj-arwah', name: 'الأرواح', icon: <Star className="w-5 h-5" /> }
-  ];
+    { id: 'miraj-arwah', name: 'الورد', icon: <HandHelping className="w-5 h-5" /> },
 
+    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
+    { id: 'mukhtarat', name: 'المكتبة', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'daily', name: 'اليومية', icon: <Calendar className="w-5 h-5" /> }
+  ];
   // Auto-masquage lors du scroll
   useEffect(() => {
     let ticking = false;
@@ -360,32 +359,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       >
         {/* Navigation rapide */}
         <div className="flex items-center justify-between px-4 py-2">
-          {quickCategories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => {
-                onCategoryChange(category.id);
-                showMenuTemporarily();
-              }}
-              className={`nav-button flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200 ${
-                selectedCategory === category.id
-                  ? 'nav-button active bg-sky-50 text-sky-600'
-                  : 'text-gray-600 hover:bg-gray-50 active:scale-95'
-              }`}
-              aria-label={`التنقل إلى ${category.name}`}
-            >
-              <div className="relative">
-                {category.icon}
-                {/* Indicateur de recherche active */}
-                {category.id === 'mukhtarat' && !!searchTerm && (
-                  <div className="search-indicator"></div>
-                )}
-              </div>
-              <span className="text-xs font-arabic leading-tight">{category.name}</span>
-            </button>
-          ))}
-
-          {/* Bouton pour étendre le menu */}
+          {/* Bouton المزيد à l'extrême gauche */}
           <button
             onClick={() => {
               setIsExpanded(!isExpanded);
@@ -398,8 +372,36 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             <ChevronUp 
               className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} 
             />
-            <span className="text-xs font-arabic leading-tight">المزيد</span>
+            <span className="text-[10px] font-arabic leading-tight">المزيد</span>
           </button>
+
+          {/* Catégories principales */}
+          <div className="flex items-center gap-2">
+            {quickCategories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => {
+                  onCategoryChange(category.id);
+                  showMenuTemporarily();
+                }}
+                className={`nav-button flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200 ${
+                  selectedCategory === category.id
+                    ? 'nav-button active bg-sky-50 text-sky-600'
+                    : 'text-gray-600 hover:bg-gray-50 active:scale-95'
+                }`}
+                aria-label={`التنقل إلى ${category.name}`}
+              >
+                <div className="relative">
+                  {category.icon}
+                  {/* Indicateur de recherche active */}
+                  {category.id === 'mukhtarat' && !!searchTerm && (
+                    <div className="search-indicator"></div>
+                  )}
+                </div>
+                <span className="text-[10px] font-arabic leading-tight">{category.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
