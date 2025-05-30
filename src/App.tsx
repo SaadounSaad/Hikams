@@ -1,10 +1,10 @@
-// App.tsx - Version corrigée avec recherche arabe optimisée
+// App.tsx - Version complète avec Bottom Navigation auto-masqué
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Menu, X, ChevronDown, Search, Home } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { QuoteProvider, useQuotes } from './context/QuoteContext';
 import { AppearanceProvider, useAppearanceSettings } from './context/AppearanceContext';
-import { Sidebar } from './components/Sidebar';
+import { BottomNavigation } from './components/BottomNavigation';
 import { QuoteViewer } from './components/QuoteViewer';
 import { QuoteForm } from './components/QuoteForm';
 import { SettingsModal } from './components/SettingsModal';
@@ -111,7 +111,6 @@ function AppContent() {
   const [editingQuote, setEditingQuote] = useState<Quote | undefined>();
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [showDeleteAllConfirmation, setShowDeleteAllConfirmation] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [filteredQuotes, setFilteredQuotes] = useState<Quote[]>([]);
   const [mirajSubcategory, setMirajSubcategory] = useState<string | null>(null);
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState<number>(0);
@@ -125,11 +124,11 @@ function AppContent() {
   const [bookNamesLoaded, setBookNamesLoaded] = useState(false);
   const [bookmarkCache, setBookmarkCache] = useState<Map<string, number>>(new Map());
   
-  // États pour la recherche - NOUVELLE APPROCHE
+  // États pour la recherche
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
   
-  // Vérifier si on est dans une catégorie qui supporte la recherche (pour les messages d'erreur)
+  // Vérifier si on est dans une catégorie qui supporte la recherche
   const isSearchContext: boolean = selectedCategory === 'mukhtarat' || 
     (!!selectedCategory && mukhtaratBookNames.includes(selectedCategory));
 
@@ -377,8 +376,6 @@ function AppContent() {
           } else if (deleteConfirmation || showDeleteAllConfirmation) {
             setDeleteConfirmation('');
             setShowDeleteAllConfirmation(false);
-          } else if (isMenuOpen) {
-            setIsMenuOpen(false);
           }
           break;
         case '1':
@@ -395,15 +392,14 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation, isMenuOpen]);
+  }, [showForm, showSettings, deleteConfirmation, showDeleteAllConfirmation]);
 
-  // NOUVELLE fonction pour gérer la recherche
+  // Gestionnaire pour la recherche
   const handleSearch = useCallback((term: string) => {
     console.log('🔍 Recherche pour:', term);
     setSearchTerm(term);
     setIsSearchActive(term.trim() !== '');
     
-    // Réinitialiser l'index si on fait une nouvelle recherche
     if (term.trim() !== '') {
       setCurrentQuoteIndex(0);
     }
@@ -492,7 +488,6 @@ function AppContent() {
     if (selectedCategory === 'all') {
       setCurrentCategoryFilter(category);
     } else {
-      // Si on clique sur mukhtarat, restaurer le dernier état
       if (category === 'mukhtarat') {
         restoreMukhtaratState();
       } else {
@@ -502,7 +497,6 @@ function AppContent() {
         setMukhtaratViewMode('all');
       }
     }
-    setIsMenuOpen(false);
     setShowMukhtaratPage(false);
     
     console.timeEnd('Category Change');
@@ -529,7 +523,6 @@ function AppContent() {
         const mukhtaratCount = quotes.filter(quote => mukhtaratBookNames.includes(quote.category)).length;
         return `عٌدَّة المريد (${mukhtaratCount})`;
       default:
-        // Afficher le titre du livre sélectionné pour les sous-catégories mukhtarat
         if (mukhtaratBookNames.includes(categoryId) && selectedBookTitle) {
           return selectedBookTitle;
         }
@@ -540,18 +533,10 @@ function AppContent() {
     }
   }, [quotes, mukhtaratBookNames, selectedBookTitle]);
 
-  // Header optimisé
+  // Header simplifié (sans bouton menu mobile)
   const renderHeader = useCallback(() => (
-    <div className={`${isSepiaMode ? 'bg-amber-50/80' : 'bg-white/80'} backdrop-blur-sm shadow-sm h-16 z-30 md:shadow-none`}>
+    <div className={`${isSepiaMode ? 'bg-amber-50/80' : 'bg-white/80'} backdrop-blur-sm shadow-sm h-16 z-30`}>
       <div className="h-full flex items-center gap-4 px-4">
-        {/* Bouton menu mobile */}
-        <button
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="md:hidden p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 transition-all"
-        >
-          {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
-        
         <div className="flex-1 flex items-center gap-4 overflow-hidden">
           <h1 className="text-xl md:text-2xl font-bold font-arabic text-sky-600 whitespace-nowrap">
             {isSearchActive && searchTerm ? `نتيجة البحث: "${searchTerm}"` : getCategoryTitle(selectedCategory)}
@@ -567,7 +552,7 @@ function AppContent() {
         </div>
       </div>
     </div>
-  ), [isSepiaMode, isMenuOpen, isSearchActive, searchTerm, getCategoryTitle, selectedCategory, filteredQuotes.length]);
+  ), [isSepiaMode, isSearchActive, searchTerm, getCategoryTitle, selectedCategory, filteredQuotes.length]);
 
   console.timeEnd('App Component Render');
 
@@ -592,127 +577,108 @@ function AppContent() {
 
   return (
     <div className={`min-h-screen ${isSepiaMode ? 'bg-gradient-to-br from-amber-50/50 to-amber-50' : 'bg-gradient-to-br from-slate-50 to-white'}`}>
-      <div className="flex min-h-screen">
-        {/* Sidebar latérale permanente - toujours visible sur desktop */}
-        <div className="hidden md:block">
-          <Sidebar 
-            selectedCategory={selectedCategory}
-            currentCategoryFilter={currentCategoryFilter}
-            onCategoryChange={handleCategoryChange}
-            onSearch={handleSearch}
-            isOpen={true}
-            onClose={() => {}}
-            onShowSettings={() => setShowSettings(true)}
-            searchResultsCount={isSearchActive ? filteredQuotes.length : undefined}
-          />
-        </div>
+      <div className="flex flex-col min-h-screen">
+        {/* Header simplifié */}
+        <header>
+          {renderHeader()}
+        </header>
 
-        {/* Contenu principal */}
-        <div className="flex-1 flex flex-col">
-          {/* Header unifié */}
-          <header>
-            {renderHeader()}
-          </header>
-
-          {/* Contenu principal */}
-          <main className="flex-1 p-6">
-            <div className="max-w-3xl mx-auto relative">
-              {/* Message informatif pour la section favoris vide */}
-              {selectedCategory === 'favorites' && filteredQuotes.length === 0 && (
-                <div className="text-center py-12">
-                  <div className="text-gray-400 mb-4">
-                    <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2 font-arabic">لا توجد مفضلة بعد</h3>
-                  <p className="text-gray-500 mb-4 font-arabic">ابدأ بإضافة بعض الحكم المفضلة</p>
+        {/* Contenu principal avec padding bottom pour le menu */}
+        <main className="flex-1 p-6 pb-20">
+          <div className="max-w-3xl mx-auto relative">
+            {/* Message informatif pour la section favoris vide */}
+            {selectedCategory === 'favorites' && filteredQuotes.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-gray-400 mb-4">
+                  <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                  </svg>
                 </div>
-              )}
+                <h3 className="text-lg font-medium text-gray-900 mb-2 font-arabic">لا توجد مفضلة بعد</h3>
+                <p className="text-gray-500 mb-4 font-arabic">ابدأ بإضافة بعض الحكم المفضلة</p>
+              </div>
+            )}
 
-              {/* Message pour recherche sans résultats */}
-              {isSearchActive && filteredQuotes.length === 0 && (
-                <div className="text-center py-12">
-                  <div className="text-gray-400 mb-4">
-                    <Search className="w-16 h-16 mx-auto" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2 font-arabic">لا توجد نتائج</h3>
-                  <p className="text-gray-500 mb-4 font-arabic">جرب كلمات أخرى للبحث</p>
+            {/* Message pour recherche sans résultats */}
+            {isSearchActive && filteredQuotes.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-gray-400 mb-4">
+                  <Search className="w-16 h-16 mx-auto" />
                 </div>
-              )}
+                <h3 className="text-lg font-medium text-gray-900 mb-2 font-arabic">لا توجد نتائج</h3>
+                <p className="text-gray-500 mb-4 font-arabic">جرب كلمات أخرى للبحث</p>
+              </div>
+            )}
 
-              {/* Indicateur de chargement global */}
-              {quotesLoading && (
-                <div className="fixed inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-40">
-                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-100 border-t-sky-600"></div>
-                  <span className="ml-3 text-sky-600 font-medium">Chargement...</span>
-                </div>
-              )}
+            {/* Indicateur de chargement global */}
+            {quotesLoading && (
+              <div className="fixed inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-40">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-100 border-t-sky-600"></div>
+                <span className="ml-3 text-sky-600 font-medium">Chargement...</span>
+              </div>
+            )}
 
-              {/* Contenu selon la catégorie sélectionnée */}
-              {showMukhtaratPage ? (
-                <MukhtaratPage 
-                  onClose={() => setShowMukhtaratPage(false)}
-                  onSelectCategory={handleMukhtaratCategorySelect}
-                />
-              ) : selectedCategory === 'miraj-arwah' ? (
-                mirajSubcategory ? (
-                  mirajSubcategory === 'wird' ? (
-                    <WirdPage onBack={() => setMirajSubcategory(null)} />
-                  ) : mirajSubcategory === 'baqiyat' ? (
-                    <AlbaqiatPage onBack={() => setMirajSubcategory(null)} />
-                  ) : (
-                    <GenericThikrPage
-                      contentId={mirajSubcategory}
-                      onBack={() => setMirajSubcategory(null)}
-                    />
-                  )
+            {/* Contenu selon la catégorie sélectionnée */}
+            {showMukhtaratPage ? (
+              <MukhtaratPage 
+                onClose={() => setShowMukhtaratPage(false)}
+                onSelectCategory={handleMukhtaratCategorySelect}
+              />
+            ) : selectedCategory === 'miraj-arwah' ? (
+              mirajSubcategory ? (
+                mirajSubcategory === 'wird' ? (
+                  <WirdPage onBack={() => setMirajSubcategory(null)} />
+                ) : mirajSubcategory === 'baqiyat' ? (
+                  <AlbaqiatPage onBack={() => setMirajSubcategory(null)} />
                 ) : (
-                  <MirajArwahPage onSelectSubcategory={setMirajSubcategory} />
+                  <GenericThikrPage
+                    contentId={mirajSubcategory}
+                    onBack={() => setMirajSubcategory(null)}
+                  />
                 )
               ) : (
-                <QuoteViewer
-                  quotes={filteredQuotes}
-                  currentIndex={currentQuoteIndex}
-                  onIndexChange={setCurrentQuoteIndex}
-                  selectedCategory={selectedCategory}
-                  onToggleFavorite={handleToggleFavorite}
-                  onEdit={(quote) => {
-                    setEditingQuote(quote);
-                    setShowForm(true);
-                  }}
-                  onDelete={(id) => {
-                    setDeleteConfirmation(id);
-                  }}
-                  searchTerm={isSearchActive ? searchTerm : undefined}
-                  // Passer le menu mukhtarat au QuoteViewer pour l'intégrer dans la navigation
-                  renderExtraControls={isMukhtaratContext() ? () => (
-                    <MukhtaratDropdownMenu
-                      onShowAll={showAllMukhtarat}
-                      onShowMukhtaratPage={openMukhtaratPage}
-                      onGoToLastPage={goToLastVisitedPage}
-                    />
-                  ) : undefined}
-                />
-              )}
-            </div>
-          </main>
-        </div>
+                <MirajArwahPage onSelectSubcategory={setMirajSubcategory} />
+              )
+            ) : (
+              <QuoteViewer
+                quotes={filteredQuotes}
+                currentIndex={currentQuoteIndex}
+                onIndexChange={setCurrentQuoteIndex}
+                selectedCategory={selectedCategory}
+                onToggleFavorite={handleToggleFavorite}
+                onEdit={(quote) => {
+                  setEditingQuote(quote);
+                  setShowForm(true);
+                }}
+                onDelete={(id) => {
+                  setDeleteConfirmation(id);
+                }}
+                searchTerm={isSearchActive ? searchTerm : undefined}
+                // Passer le menu mukhtarat au QuoteViewer
+                renderExtraControls={isMukhtaratContext() ? () => (
+                  <MukhtaratDropdownMenu
+                    onShowAll={showAllMukhtarat}
+                    onShowMukhtaratPage={openMukhtaratPage}
+                    onGoToLastPage={goToLastVisitedPage}
+                  />
+                ) : undefined}
+              />
+            )}
+          </div>
+        </main>
       </div>
 
-      {/* Sidebar mobile (overlay) */}
-      <Sidebar 
+      {/* Bottom Navigation - Remplace la Sidebar */}
+      <BottomNavigation 
         selectedCategory={selectedCategory}
         currentCategoryFilter={currentCategoryFilter}
         onCategoryChange={handleCategoryChange}
         onSearch={handleSearch}
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
         onShowSettings={() => setShowSettings(true)}
         searchResultsCount={isSearchActive ? filteredQuotes.length : undefined}
       />
 
-      {/* Modals */}
+      {/* Modals - restent identiques */}
       {showForm && (
         <div className="fixed inset-0 bg-gray-500/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <QuoteForm
