@@ -1,4 +1,4 @@
-// src/components/QuoteViewer.tsx - Version avec support de recherche
+// src/components/QuoteViewer.tsx - Version mise à jour avec support Bottom Navigation
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
@@ -91,7 +91,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   // Si aucune citation n'est disponible
   if (quotes.length === 0) {
     return (
-      <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm">
+      <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm mb-6">
         <div className="text-gray-500 space-y-2">
           <Library className="w-12 h-12 mx-auto text-gray-400" />
           <p className="text-lg font-medium">Aucune citation trouvée</p>
@@ -109,7 +109,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   // Si chargement en cours, afficher un indicateur
   if (isLoading) {
     return (
-      <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm">
+      <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm mb-6">
         <div className="text-gray-500 space-y-2">
           <div className="w-12 h-12 mx-auto border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
           <p className="text-lg font-medium">Chargement des citations...</p>
@@ -123,7 +123,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   const currentQuote = isValidIndex ? quotes[currentIndex] : null;
 
   return (
-    <>
+    <div className="pb-6 mb-6">
       {/* Affichage du statut de recherche si applicable */}
       {searchTerm && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -151,7 +151,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           {/* Boutons de navigation gauche */}
           <button 
             onClick={handleNavigateToFirst} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={quotes.length === 0 || currentIndex === 0}
             title="الذهاب إلى البداية"
           >
@@ -159,7 +159,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           </button>
           <button 
             onClick={() => handleSwipe('right')} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={quotes.length === 0 || currentIndex === 0}
             title="السابق"
           >
@@ -176,7 +176,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
         <div className="flex items-center gap-1">
           <button 
             onClick={() => handleSwipe('left')} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={quotes.length === 0 || currentIndex >= quotes.length - 1}
             title="التالي"
           >
@@ -184,7 +184,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           </button>
           <button 
             onClick={handleNavigateToLast} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors"
+            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={quotes.length === 0 || currentIndex >= quotes.length - 1}
             title="الذهاب إلى النهاية"
           >
@@ -194,7 +194,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           {/* Bouton bookmark */}
           <button
             onClick={handleManualBookmark}
-            className={`p-2 rounded-full transition-colors ${
+            className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               bookmarkIndex === currentIndex 
                 ? 'bg-blue-100 text-blue-600' 
                 : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
@@ -207,7 +207,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
         </div>
       </div>
 
-      {/* Contenu de la citation */}
+      {/* Contenu de la citation avec espacement pour Bottom Navigation */}
       {currentQuote ? (
         <QuoteCard
           quote={currentQuote}
@@ -222,6 +222,6 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           <p className="text-center text-gray-500">Citation non disponible ou en cours de chargement</p>
         </div>
       )}
-    </>
+    </div>
   );
 };

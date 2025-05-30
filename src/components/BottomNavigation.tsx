@@ -88,6 +88,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   // Fonction centralisée pour gérer l'affichage temporaire du menu
   const showMenuTemporarily = useCallback(() => {
     console.log('🔍 showMenuTemporarily called - isExpanded:', isExpanded);
+    console.log('📱 Touch device check:', 'ontouchstart' in window);
+    
     setIsHidden(false);
     setUserInteracted(true);
     
@@ -211,28 +213,43 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY, isExpanded, showMenuTemporarily, cancelHideTimer]);
 
-  // Détection des interactions tactiles/souris
+  // Détection des interactions tactiles/souris (première fois seulement) - DÉSACTIVÉ
+  // useEffect(() => {
+  //   if (userInteracted) return;
+  //   
+  //   const handleInteraction = (e: Event) => {
+  //     // Éviter de révéler le menu sur des interactions normales
+  //     if (e.type === 'touchstart' || e.type === 'mousedown') {
+  //       const target = e.target as Element;
+  //       // Seulement si ce n'est pas une interaction avec un élément UI
+  //       if (!target.closest('button, a, input, textarea, select')) {
+  //         console.log('🎯 First meaningful interaction detected');
+  //         showMenuTemporarily();
+  //       }
+  //     } else if (e.type === 'keydown') {
+  //       showMenuTemporarily();
+  //     }
+  //   };
+
+  //   const events = ['touchstart', 'mousedown', 'keydown'];
+  //   events.forEach(event => {
+  //     document.addEventListener(event, handleInteraction, { once: true, passive: true });
+  //   });
+
+  //   return () => {
+  //     events.forEach(event => {
+  //       document.removeEventListener(event, handleInteraction);
+  //     });
+  //   };
+  // }, [userInteracted, showMenuTemporarily]);
+
+  // Afficher le menu quand on survole la zone en bas (desktop seulement)
   useEffect(() => {
-    if (userInteracted) return;
+    // Vérifier si on est sur desktop
+    const isDesktop = !('ontouchstart' in window) && window.innerWidth > 768;
     
-    const handleInteraction = () => {
-      showMenuTemporarily();
-    };
-
-    const events = ['touchstart', 'mousedown', 'keydown'];
-    events.forEach(event => {
-      document.addEventListener(event, handleInteraction, { once: true, passive: true });
-    });
-
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, handleInteraction);
-      });
-    };
-  }, [userInteracted, showMenuTemporarily]);
-
-  // Afficher le menu quand on survole la zone en bas
-  useEffect(() => {
+    if (!isDesktop) return; // Skip sur mobile/tactile
+    
     const handleMouseMove = (e: MouseEvent) => {
       const windowHeight = window.innerHeight;
       const mouseY = e.clientY;
@@ -248,22 +265,42 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     };
   }, [showMenuTemporarily]);
 
-  // Afficher le menu lors du toucher en bas d'écran
-  useEffect(() => {
-    const handleTouchStart = (e: TouchEvent) => {
-      const windowHeight = window.innerHeight;
-      const touchY = e.touches[0].clientY;
-      
-      if (touchY > windowHeight - 100) {
-        showMenuTemporarily();
-      }
-    };
+  // Afficher le menu lors du toucher en bas d'écran - DÉSACTIVÉ pour éviter déclenchements intempestifs
+  // useEffect(() => {
+  //   let startY = 0;
+  //   let startTime = 0;
+  //   
+  //   const handleTouchStart = (e: TouchEvent) => {
+  //     startY = e.touches[0].clientY;
+  //     startTime = Date.now();
+  //   };
+  //   
+  //   const handleTouchEnd = (e: TouchEvent) => {
+  //     const endY = e.changedTouches[0].clientY;
+  //     const endTime = Date.now();
+  //     const windowHeight = window.innerHeight;
+  //     const deltaY = startY - endY;
+  //     const deltaTime = endTime - startTime;
+  //     
+  //     // Vérifier si c'est un swipe up depuis le bas ET rapide
+  //     const isSwipeUp = deltaY > 30 && deltaTime < 500;
+  //     const isFromBottom = startY > windowHeight - 100;
+  //     
+  //     // Seulement révéler le menu si c'est un vrai swipe up depuis le bas
+  //     if (isSwipeUp && isFromBottom) {
+  //       console.log('📱 Swipe up detected from bottom');
+  //       showMenuTemporarily();
+  //     }
+  //   };
 
-    document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-    };
-  }, [showMenuTemporarily]);
+  //   document.addEventListener('touchstart', handleTouchStart, { passive: true });
+  //   document.addEventListener('touchend', handleTouchEnd, { passive: true });
+  //   
+  //   return () => {
+  //     document.removeEventListener('touchstart', handleTouchStart);
+  //     document.removeEventListener('touchend', handleTouchEnd);
+  //   };
+  // }, [showMenuTemporarily]);
 
   // Gestion du menu étendu
   useEffect(() => {
@@ -325,20 +362,31 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
   return (
     <>
-      {/* Bouton transparent permanent pour révéler le menu */}
+      {/* Bouton transparent discret en bas à gauche pour révéler le menu */}
       {isHidden && (
-        <div className="fixed bottom-1 left-0 right-0 z-40 flex justify-center">
+        <div className="fixed bottom-4 left-4 z-40">
           <button
             onClick={() => showMenuTemporarily()}
-            className="w-32 h-1 bg-gray-900/30 rounded-full
-                       hover:bg-gray-900/40 hover:h-1.5 hover:w-36
-                       active:scale-95 transition-all duration-200"
+            onTouchEnd={() => showMenuTemporarily()}
+            className="w-6 h-6 bg-white/10 backdrop-blur-sm rounded-full
+                       hover:bg-white/20 active:bg-white/30 active:scale-95 
+                       transition-all duration-200 shadow-lg border border-white/20
+                       flex items-center justify-center"
             aria-label="إظهار القائمة"
             style={{
               // Zone de sécurité pour iPhone
-              marginBottom: 'max(4px, env(safe-area-inset-bottom))'
+              marginBottom: 'max(8px, env(safe-area-inset-bottom))',
+              touchAction: 'manipulation',
+              WebkitTouchCallout: 'none',
+              // Zone de touch élargie pour petite taille
+              minHeight: '44px',
+              minWidth: '44px',
+              padding: '9px' // Centre le petit bouton dans la zone de touch
             }}
-          />
+          >
+            {/* Icône + */}
+            <div className="text-white/60 text-xs font-bold leading-none">+</div>
+          </button>
         </div>
       )}
 
@@ -355,27 +403,16 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
         className={`fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-50 transition-all duration-300 ease-in-out ${
           isHidden ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'
         }`}
-        onMouseEnter={() => showMenuTemporarily()}
+        onMouseEnter={() => {
+          // Seulement sur desktop ET pas sur appareils tactiles
+          if (!('ontouchstart' in window) && window.innerWidth > 768) {
+            showMenuTemporarily();
+          }
+        }}
       >
         {/* Navigation rapide */}
-        <div className="flex items-center justify-between px-4 py-2">
-          {/* Bouton المزيد à l'extrême gauche */}
-          <button
-            onClick={() => {
-              setIsExpanded(!isExpanded);
-              showMenuTemporarily();
-            }}
-            className="nav-button flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 transition-all duration-200 active:scale-95"
-            aria-label={isExpanded ? 'إخفاء القائمة' : 'إظهار المزيد'}
-            aria-expanded={isExpanded}
-          >
-            <ChevronUp 
-              className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} 
-            />
-            <span className="text-[10px] font-arabic leading-tight">المزيد</span>
-          </button>
-
-          {/* Catégories principales */}
+        <div className="flex items-center justify-end px-4 py-2"> {/* justify-end au lieu de justify-between */}
+          {/* Catégories principales - المزيد supprimé */}
           <div className="flex items-center gap-2">
             {quickCategories.map((category) => (
               <button
@@ -405,10 +442,23 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
         </div>
       </div>
 
-      {/* Menu étendu */}
+      {/* Menu étendu - déclenché par le bouton transparent */}
       {isExpanded && (
         <div className="fixed bottom-16 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-50 max-h-80 overflow-y-auto">
           <div className="p-4">
+            {/* Bouton المزيد déplacé dans le menu étendu */}
+            <div className="mb-4 pb-4 border-b border-gray-200">
+              <div className="flex items-center justify-center">
+                <button
+                  onClick={() => setIsExpanded(false)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  <ChevronUp className="w-4 h-4 rotate-180" />
+                  <span className="text-sm font-arabic">إخفاء القائمة</span>
+                </button>
+              </div>
+            </div>
+
             {/* Section de recherche */}
             {isSearchEnabled && (
               <div className="mb-4">
