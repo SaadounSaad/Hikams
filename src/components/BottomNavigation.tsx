@@ -1,6 +1,6 @@
 // BottomNavigation.tsx - Menu de navigation en bas auto-masqué avec indicateur
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp } from 'lucide-react';
+import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp, HandHelping, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // Composant indicateur d'aide
@@ -177,41 +177,40 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
   // Catégories principales pour navigation rapide
   const quickCategories = [
-    { id: 'daily', name: 'اليوم', icon: <Calendar className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'المريد', icon: <Star className="w-5 h-5" /> },
+    { id: 'miraj-arwah', name: 'الورد', icon: <HandHelping className="w-5 h-5" /> },
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
-    { id: 'miraj-arwah', name: 'الأرواح', icon: <Star className="w-5 h-5" /> }
-  ];
+    { id: 'mukhtarat', name: 'المكتبة', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'daily', name: 'اليومية', icon: <Calendar className="w-5 h-5" /> }
+];
+  // Auto-masquage lors du scroll - DÉSACTIVÉ
+  // useEffect(() => {
+  //   let ticking = false;
+  //   
+  //   const handleScroll = () => {
+  //     if (!ticking) {
+  //       requestAnimationFrame(() => {
+  //         const currentScrollY = window.scrollY;
+  //         
+  //         // Afficher le menu si on scroll vers le haut ou si on est en haut de page
+  //         if (currentScrollY < lastScrollY || currentScrollY < 10) {
+  //           showMenuTemporarily();
+  //         } 
+  //         // Masquer le menu si on scroll vers le bas (sauf si menu étendu ouvert)
+  //         else if (currentScrollY > lastScrollY && currentScrollY > 50 && !isExpanded) {
+  //           setIsHidden(true);
+  //           cancelHideTimer();
+  //         }
+  //         
+  //         setLastScrollY(currentScrollY);
+  //         ticking = false;
+  //       });
+  //       ticking = true;
+  //     }
+  //   };
 
-  // Auto-masquage lors du scroll
-  useEffect(() => {
-    let ticking = false;
-    
-    const handleScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY;
-          
-          // Afficher le menu si on scroll vers le haut ou si on est en haut de page
-          if (currentScrollY < lastScrollY || currentScrollY < 10) {
-            showMenuTemporarily();
-          } 
-          // Masquer le menu si on scroll vers le bas (sauf si menu étendu ouvert)
-          else if (currentScrollY > lastScrollY && currentScrollY > 50 && !isExpanded) {
-            setIsHidden(true);
-            cancelHideTimer();
-          }
-          
-          setLastScrollY(currentScrollY);
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY, isExpanded, showMenuTemporarily, cancelHideTimer]);
+  //   window.addEventListener('scroll', handleScroll, { passive: true });
+  //   return () => window.removeEventListener('scroll', handleScroll);
+  // }, [lastScrollY, isExpanded, showMenuTemporarily, cancelHideTimer]);
 
   // Détection des interactions tactiles/souris (première fois seulement) - DÉSACTIVÉ
   // useEffect(() => {
@@ -243,27 +242,27 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   //   };
   // }, [userInteracted, showMenuTemporarily]);
 
-  // Afficher le menu quand on survole la zone en bas (desktop seulement)
-  useEffect(() => {
-    // Vérifier si on est sur desktop
-    const isDesktop = !('ontouchstart' in window) && window.innerWidth > 768;
-    
-    if (!isDesktop) return; // Skip sur mobile/tactile
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      const windowHeight = window.innerHeight;
-      const mouseY = e.clientY;
-      
-      if (mouseY > windowHeight - 80) {
-        showMenuTemporarily();
-      }
-    };
+  // Afficher le menu quand on survole la zone en bas - DÉSACTIVÉ
+  // useEffect(() => {
+  //   // Vérifier si on est sur desktop
+  //   const isDesktop = !('ontouchstart' in window) && window.innerWidth > 768;
+  //   
+  //   if (!isDesktop) return; // Skip sur mobile/tactile
+  //   
+  //   const handleMouseMove = (e: MouseEvent) => {
+  //     const windowHeight = window.innerHeight;
+  //     const mouseY = e.clientY;
+  //     
+  //     if (mouseY > windowHeight - 80) {
+  //       showMenuTemporarily();
+  //     }
+  //   };
 
-    document.addEventListener('mousemove', handleMouseMove, { passive: true });
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [showMenuTemporarily]);
+  //   document.addEventListener('mousemove', handleMouseMove, { passive: true });
+  //   return () => {
+  //     document.removeEventListener('mousemove', handleMouseMove);
+  //   };
+  // }, [showMenuTemporarily]);
 
   // Afficher le menu lors du toucher en bas d'écran - DÉSACTIVÉ pour éviter déclenchements intempestifs
   // useEffect(() => {
@@ -314,17 +313,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     }
   }, [isExpanded, userInteracted, isHidden, cancelHideTimer, startHideTimer]);
 
-  // Gestion des touches de navigation
+  // Gestion des touches de navigation - LIMITÉ aux touches 1-4 seulement
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['1', '2', '3', '4', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-        showMenuTemporarily();
-      }
-      
-      if (e.key === 'Escape' && isExpanded) {
-        setIsExpanded(false);
-      }
-      
+      // Navigation directe avec les touches numériques SANS révéler le menu
       if (!isExpanded && e.target === document.body) {
         switch (e.key) {
           case '1':
@@ -345,11 +337,16 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             break;
         }
       }
+      
+      // Fermer le menu étendu avec Escape
+      if (e.key === 'Escape' && isExpanded) {
+        setIsExpanded(false);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isExpanded, onCategoryChange, showMenuTemporarily]);
+  }, [isExpanded, onCategoryChange]);
 
   // Nettoyage des timers au démontage
   useEffect(() => {
@@ -364,13 +361,19 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     <>
       {/* Bouton transparent discret en bas à gauche pour révéler le menu */}
       {isHidden && (
-        <div className="fixed bottom-4 left-4 z-40">
+        <div className="fixed bottom-2 left-0 z-40">
           <button
-            onClick={() => showMenuTemporarily()}
-            onTouchEnd={() => showMenuTemporarily()}
-            className="w-6 h-6 bg-white/10 backdrop-blur-sm rounded-full
-                       hover:bg-white/20 active:bg-white/30 active:scale-95 
-                       transition-all duration-200 shadow-lg border border-white/20
+            onClick={() => {
+              console.log('🔘 Bouton + cliqué - Révélation du menu');
+              showMenuTemporarily();
+            }}
+            onTouchEnd={() => {
+              console.log('🔘 Bouton + touché - Révélation du menu');
+              showMenuTemporarily();
+            }}
+            className="w-6 h-6 bg-gray/10 backdrop-blur-sm rounded-full
+                       hover:bg-gray/20 active:bg-gray/30 active:scale-95 
+                       transition-all duration-200 shadow-lg border border-gray/20
                        flex items-center justify-center"
             aria-label="إظهار القائمة"
             style={{
@@ -385,7 +388,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             }}
           >
             {/* Icône + */}
-            <div className="text-white/60 text-xs font-bold leading-none">+</div>
+            <div className="text-black/60 text-xs font-bold leading-none">=</div>
           </button>
         </div>
       )}
@@ -403,12 +406,6 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
         className={`fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-50 transition-all duration-300 ease-in-out ${
           isHidden ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'
         }`}
-        onMouseEnter={() => {
-          // Seulement sur desktop ET pas sur appareils tactiles
-          if (!('ontouchstart' in window) && window.innerWidth > 768) {
-            showMenuTemporarily();
-          }
-        }}
       >
         {/* Navigation rapide */}
         <div className="flex items-center justify-end px-4 py-2"> {/* justify-end au lieu de justify-between */}
