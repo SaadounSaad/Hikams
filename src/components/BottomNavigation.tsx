@@ -78,9 +78,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   const [isHidden, setIsHidden] = useState(true); // Masqué par défaut
   const [lastScrollY, setLastScrollY] = useState(0);
   const [userInteracted, setUserInteracted] = useState(false);
-  const [hideTimer, setHideTimer] = useState<NodeJS.Timeout | null>(null);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
+  // Vérifier si on est dans une catégorie qui supporte la recherche
+  const isSearchEnabled: boolean = selectedCategory === 'mukhtarat' || 
+    (!!selectedCategory && selectedCategory.includes('mukhtarat'));
+
   // Fonction centralisée pour gérer l'affichage temporaire du menu
   const showMenuTemporarily = useCallback(() => {
     console.log('🔍 showMenuTemporarily called - isExpanded:', isExpanded);
@@ -127,190 +131,6 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       }, 3000);
     }
   }, [isExpanded, cancelHideTimer]);
-
-  // Fonction pour afficher temporairement le menu
-  const showMenuTemporarily = useCallback(() => {
-    setIsHidden(false);
-    setUserInteracted(true);
-    
-    // Masquer automatiquement après 3 secondes d'inactivité
-    if (hideTimer) {
-      clearTimeout(hideTimer);
-    }
-    
-    const timer = setTimeout(() => {
-      if (!isExpanded) { // Ne pas masquer si le menu étendu est ouvert
-        setIsHidden(true);
-      }
-    }, 3000);
-    
-    setHideTimer(timer);
-  }, [hideTimer, isExpanded]);
-
-  // Vérifier si on est dans une catégorie qui supporte la recherche
-  const isSearchEnabled: boolean = selectedCategory === 'mukhtarat' || 
-    (!!selectedCategory && selectedCategory.includes('mukhtarat'));
-
-  // Auto-masquage lors du scroll
-  useEffect(() => {
-    let ticking = false;
-    
-    const handleScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY;
-          
-          // Afficher le menu si on scroll vers le haut ou si on est en haut de page
-          if (currentScrollY < lastScrollY || currentScrollY < 10) {
-            showMenuTemporarily();
-          } 
-          // Masquer le menu si on scroll vers le bas (sauf si menu étendu ouvert)
-          else if (currentScrollY > lastScrollY && currentScrollY > 50 && !isExpanded) {
-            setIsHidden(true);
-            cancelHideTimer();
-          }
-          
-          setLastScrollY(currentScrollY);
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY, isExpanded, showMenuTemporarily, cancelHideTimer]);
-
-  // Détection des interactions tactiles/souris - SIMPLIFIÉ
-  useEffect(() => {
-    if (userInteracted) return; // Éviter les re-renders inutiles
-    
-    const handleInteraction = () => {
-      showMenuTemporarily();
-    };
-
-    // Afficher le menu lors des premières interactions
-    const events = ['touchstart', 'mousedown', 'keydown'];
-    events.forEach(event => {
-      document.addEventListener(event, handleInteraction, { once: true, passive: true });
-    });
-
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, handleInteraction);
-      });
-    };
-  }, [userInteracted, showMenuTemporarily]);
-
-  // Afficher le menu quand on survole la zone en bas
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      const windowHeight = window.innerHeight;
-      const mouseY = e.clientY;
-      
-      // Si la souris est dans les 80px du bas de l'écran
-      if (mouseY > windowHeight - 80) {
-        showMenuTemporarily();
-      }
-    };
-
-    document.addEventListener('mousemove', handleMouseMove, { passive: true });
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [showMenuTemporarily]);
-
-  // Afficher le menu lors du toucher en bas d'écran
-  useEffect(() => {
-    const handleTouchStart = (e: TouchEvent) => {
-      const windowHeight = window.innerHeight;
-      const touchY = e.touches[0].clientY;
-      
-      // Si le toucher est dans les 100px du bas de l'écran
-      if (touchY > windowHeight - 100) {
-        showMenuTemporarily();
-      }
-    };
-
-    document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-    };
-  }, [showMenuTemporarily]);
-
-  // Gestion du menu étendu
-  useEffect(() => {
-    if (isExpanded) {
-      // Garder le menu visible quand il est étendu
-      setIsHidden(false);
-      cancelHideTimer();
-    } else {
-      // Redémarrer le timer quand le menu se ferme
-      if (userInteracted && !isHidden) {
-        startHideTimer();
-      }
-    }
-  }, [isExpanded, userInteracted, isHidden, cancelHideTimer, startHideTimer]);
-
-  // Gestion des touches de navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Afficher le menu lors de l'utilisation du clavier
-      if (['1', '2', '3', '4', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-        showMenuTemporarily();
-      }
-      
-      // Fermer le menu étendu avec Escape
-      if (e.key === 'Escape' && isExpanded) {
-        setIsExpanded(false);
-      }
-      
-      // Navigation rapide avec les touches numériques
-      if (!isExpanded && e.target === document.body) {
-        switch (e.key) {
-          case '1':
-            onCategoryChange('daily');
-            break;
-          case '2':
-            onCategoryChange('mukhtarat');
-            break;
-          case '3':
-            onCategoryChange('favorites');
-            break;
-          case '4':
-            onCategoryChange('miraj-arwah');
-            break;
-          case ' ':
-            e.preventDefault();
-            setIsExpanded(!isExpanded);
-            break;
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isExpanded, onCategoryChange, showMenuTemporarily]);
-
-  // Nettoyage des timers au démontage
-  useEffect(() => {
-    return () => {
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Auto-fermeture du menu étendu après inactivité
-  useEffect(() => {
-    if (!isExpanded) return;
-
-    const timer = setTimeout(() => {
-      setIsExpanded(false);
-    }, 30000); // 30 secondes
-
-    return () => clearTimeout(timer);
-  }, [isExpanded]);
 
   // Recherche en temps réel avec debounce
   useEffect(() => {
@@ -360,6 +180,148 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
     { id: 'miraj-arwah', name: 'الأرواح', icon: <Star className="w-5 h-5" /> }
   ];
+
+  // Auto-masquage lors du scroll
+  useEffect(() => {
+    let ticking = false;
+    
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+          
+          // Afficher le menu si on scroll vers le haut ou si on est en haut de page
+          if (currentScrollY < lastScrollY || currentScrollY < 10) {
+            showMenuTemporarily();
+          } 
+          // Masquer le menu si on scroll vers le bas (sauf si menu étendu ouvert)
+          else if (currentScrollY > lastScrollY && currentScrollY > 50 && !isExpanded) {
+            setIsHidden(true);
+            cancelHideTimer();
+          }
+          
+          setLastScrollY(currentScrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY, isExpanded, showMenuTemporarily, cancelHideTimer]);
+
+  // Détection des interactions tactiles/souris
+  useEffect(() => {
+    if (userInteracted) return;
+    
+    const handleInteraction = () => {
+      showMenuTemporarily();
+    };
+
+    const events = ['touchstart', 'mousedown', 'keydown'];
+    events.forEach(event => {
+      document.addEventListener(event, handleInteraction, { once: true, passive: true });
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, handleInteraction);
+      });
+    };
+  }, [userInteracted, showMenuTemporarily]);
+
+  // Afficher le menu quand on survole la zone en bas
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const windowHeight = window.innerHeight;
+      const mouseY = e.clientY;
+      
+      if (mouseY > windowHeight - 80) {
+        showMenuTemporarily();
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [showMenuTemporarily]);
+
+  // Afficher le menu lors du toucher en bas d'écran
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      const windowHeight = window.innerHeight;
+      const touchY = e.touches[0].clientY;
+      
+      if (touchY > windowHeight - 100) {
+        showMenuTemporarily();
+      }
+    };
+
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+    };
+  }, [showMenuTemporarily]);
+
+  // Gestion du menu étendu
+  useEffect(() => {
+    if (isExpanded) {
+      setIsHidden(false);
+      cancelHideTimer();
+    } else {
+      if (userInteracted && !isHidden) {
+        startHideTimer();
+      }
+    }
+  }, [isExpanded, userInteracted, isHidden, cancelHideTimer, startHideTimer]);
+
+  // Gestion des touches de navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['1', '2', '3', '4', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+        showMenuTemporarily();
+      }
+      
+      if (e.key === 'Escape' && isExpanded) {
+        setIsExpanded(false);
+      }
+      
+      if (!isExpanded && e.target === document.body) {
+        switch (e.key) {
+          case '1':
+            onCategoryChange('daily');
+            break;
+          case '2':
+            onCategoryChange('mukhtarat');
+            break;
+          case '3':
+            onCategoryChange('favorites');
+            break;
+          case '4':
+            onCategoryChange('miraj-arwah');
+            break;
+          case ' ':
+            e.preventDefault();
+            setIsExpanded(!isExpanded);
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isExpanded, onCategoryChange, showMenuTemporarily]);
+
+  // Nettoyage des timers au démontage
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <>
