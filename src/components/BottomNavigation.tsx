@@ -1,4 +1,4 @@
-// BottomNavigation.tsx - Menu de navigation en bas auto-masqué avec indicateur
+// BottomNavigation.tsx - Menu de navigation en bas auto-masqué avec modal de recherche
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp, HandHelping, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -55,6 +55,227 @@ const MenuHintIndicator: React.FC<{
   );
 };
 
+// Composant Modal de Recherche
+const SearchModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSearch: (searchTerm: string) => void;
+  searchResultsCount?: number;
+  selectedCategory: string;
+}> = ({ isOpen, onClose, onSearch, searchResultsCount, selectedCategory }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [lastCategory, setLastCategory] = useState(selectedCategory);
+  const [hasSearched, setHasSearched] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Effacer la recherche si changement de catégorie
+  useEffect(() => {
+    if (selectedCategory !== lastCategory) {
+      console.log('🔄 Changement de catégorie - Effacement recherche');
+      setSearchTerm('');
+      setHasSearched(false);
+      onSearch('');
+      setLastCategory(selectedCategory);
+    }
+  }, [selectedCategory, lastCategory, onSearch]);
+
+  // Focus automatique et relance de recherche si terme existant
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+        // Relancer automatiquement la recherche si terme existant
+        if (searchTerm && !hasSearched) {
+          console.log('🔍 Relance automatique de la recherche:', searchTerm);
+          setIsSearching(true);
+          setTimeout(() => {
+            onSearch(searchTerm);
+            setHasSearched(true);
+            setIsSearching(false);
+          }, 300);
+        }
+      }, 100);
+    }
+  }, [isOpen, searchTerm, hasSearched, onSearch]);
+
+  // Gérer la fermeture avec Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onClose]);
+
+  // Gérer la fermeture avec persistance du terme
+  const handleClose = () => {
+    console.log('🔒 Fermeture modal - Conservation du terme:', searchTerm);
+    setHasSearched(false); // Reset pour relance auto à la prochaine ouverture
+    onClose();
+  };
+
+  // Gérer le changement dans l'input de recherche avec debounce
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    setHasSearched(false);
+    
+    // Debounce intégré pour la recherche
+    setIsSearching(true);
+    setTimeout(() => {
+      onSearch(value);
+      setHasSearched(true);
+      setIsSearching(false);
+    }, 300);
+  };
+
+  // Effacer complètement et recommencer
+  const handleClearAndRestart = () => {
+    console.log('🆕 Nouvelle recherche - Effacement complet');
+    setSearchTerm('');
+    setHasSearched(false);
+    onSearch('');
+    setIsSearching(false);
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  };
+
+  // Effacer seulement le champ (garde l'historique)
+  const handleClearField = () => {
+    setSearchTerm('');
+    setHasSearched(false);
+    onSearch('');
+    setIsSearching(false);
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Overlay */}
+      <div
+        className="fixed inset-0 bg-black/50 z-50"
+        onClick={handleClose}
+      />
+      
+      {/* Modal */}
+      <div className="fixed inset-x-4 top-20 bg-white rounded-2xl shadow-2xl z-50 max-h-96 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold font-arabic text-gray-800">
+            بحث في عدة المريد
+          </h2>
+          <button
+            onClick={handleClose}
+            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            aria-label="إغلاق البحث"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Champ de recherche */}
+        <div className="p-4">
+          <div className="relative">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder="ابحث عن النصوص والأدعية..."
+              dir="rtl"
+              className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-transparent text-base font-arabic transition-all"
+            />
+            
+            {/* Icône de recherche ou spinner */}
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+              {isSearching ? (
+                <div className="w-5 h-5 border-2 border-sky-300 border-t-sky-600 rounded-full animate-spin"></div>
+              ) : (
+                <Search className="w-5 h-5 text-gray-400" />
+              )}
+            </div>
+            
+            {/* Bouton X pour effacer le champ */}
+            {!!searchTerm && (
+              <button
+                onClick={handleClearField}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                aria-label="مسح النص"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Actions de recherche */}
+          {hasSearched && searchTerm && (
+            <div className="mt-3 flex gap-2 justify-center">
+              <button
+                onClick={handleClearAndRestart}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-arabic transition-colors"
+              >
+                <X className="w-4 h-4" />
+                بحث جديد
+              </button>
+              <button
+                onClick={handleClose}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-sky-100 hover:bg-sky-200 text-sky-700 rounded-lg text-sm font-arabic transition-colors"
+              >
+                إغلاق وحفظ النتائج
+              </button>
+            </div>
+          )}
+          
+          {/* Affichage du nombre de résultats */}
+          {!!searchTerm && typeof searchResultsCount !== 'undefined' && hasSearched && (
+            <div className="mt-4 text-center">
+              {searchResultsCount > 0 ? (
+                <span className="inline-flex items-center gap-2 text-sm font-arabic text-green-700 bg-green-50 px-4 py-2 rounded-full">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  {searchResultsCount} نتيجة بحث
+                </span>
+              ) : (
+                <div className="space-y-2">
+                  <span className="inline-flex items-center gap-2 text-sm font-arabic text-red-600 bg-red-50 px-4 py-2 rounded-full">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    لا توجد نتائج
+                  </span>
+                  <div className="text-xs text-gray-500 font-arabic">
+                    جرب كلمات أخرى أو تحقق من الإملاء
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Instructions d'aide */}
+          {!searchTerm && (
+            <div className="mt-4 text-center space-y-2">
+              <div className="text-sm text-gray-500 font-arabic">
+                اكتب كلمة أو عبارة للبحث في المكتبة
+              </div>
+              <div className="text-xs text-gray-400 font-arabic">
+                💡 نصيحة: استخدم كلمات بسيطة للحصول على نتائج أفضل
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
 interface BottomNavigationProps {
   selectedCategory: string;
   currentCategoryFilter: string;
@@ -72,23 +293,26 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   searchResultsCount
 }) => {
   const { logout } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isHidden, setIsHidden] = useState(true); // Masqué par défaut
-  const [lastScrollY, setLastScrollY] = useState(0);
   const [userInteracted, setUserInteracted] = useState(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   
-  // Vérifier si on est dans une catégorie qui supporte la recherche
-  const isSearchEnabled: boolean = selectedCategory === 'mukhtarat' || 
-    (!!selectedCategory && selectedCategory.includes('mukhtarat'));
+  // Vérifier si on doit afficher le bouton de recherche
+  const shouldShowSearchButton = selectedCategory === 'mukhtarat';
+
+  console.log('🔍 DEBUG COMPLET:', {
+    selectedCategory,
+    shouldShowSearchButton,
+    isSearchOpen,
+    isExpanded,
+    isHidden
+  });
 
   // Fonction centralisée pour gérer l'affichage temporaire du menu
   const showMenuTemporarily = useCallback(() => {
     console.log('🔍 showMenuTemporarily called - isExpanded:', isExpanded);
-    console.log('📱 Touch device check:', 'ontouchstart' in window);
     
     setIsHidden(false);
     setUserInteracted(true);
@@ -134,173 +358,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     }
   }, [isExpanded, cancelHideTimer]);
 
-  // Recherche en temps réel avec debounce
-  useEffect(() => {
-    if (!isSearchEnabled) {
-      if (searchTerm) {
-        setSearchTerm('');
-        onSearch('');
-      }
-      return;
-    }
-
-    setIsSearching(true);
-    
-    const timeoutId = setTimeout(() => {
-      onSearch(searchTerm);
-      setIsSearching(false);
-    }, 300);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      setIsSearching(false);
-    };
-  }, [searchTerm, onSearch, isSearchEnabled]);
-
-  // Effacer la recherche
-  const handleClearSearch = () => {
-    setSearchTerm('');
-    onSearch('');
-    if (searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  };
-
-  // Gérer le changement dans l'input de recherche
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (!isSearchEnabled && !!value) {
-      return;
-    }
-    setSearchTerm(value);
-  };
-
-  // Catégories principales pour navigation rapide
+    // Catégories principales pour navigation rapide
   const quickCategories = [
     { id: 'miraj-arwah', name: 'الورد', icon: <HandHelping className="w-5 h-5" /> },
     { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
     { id: 'mukhtarat', name: 'المكتبة', icon: <BookOpen className="w-5 h-5" /> },
     { id: 'daily', name: 'اليومية', icon: <Calendar className="w-5 h-5" /> }
 ];
-  // Auto-masquage lors du scroll - DÉSACTIVÉ
-  // useEffect(() => {
-  //   let ticking = false;
-  //   
-  //   const handleScroll = () => {
-  //     if (!ticking) {
-  //       requestAnimationFrame(() => {
-  //         const currentScrollY = window.scrollY;
-  //         
-  //         // Afficher le menu si on scroll vers le haut ou si on est en haut de page
-  //         if (currentScrollY < lastScrollY || currentScrollY < 10) {
-  //           showMenuTemporarily();
-  //         } 
-  //         // Masquer le menu si on scroll vers le bas (sauf si menu étendu ouvert)
-  //         else if (currentScrollY > lastScrollY && currentScrollY > 50 && !isExpanded) {
-  //           setIsHidden(true);
-  //           cancelHideTimer();
-  //         }
-  //         
-  //         setLastScrollY(currentScrollY);
-  //         ticking = false;
-  //       });
-  //       ticking = true;
-  //     }
-  //   };
-
-  //   window.addEventListener('scroll', handleScroll, { passive: true });
-  //   return () => window.removeEventListener('scroll', handleScroll);
-  // }, [lastScrollY, isExpanded, showMenuTemporarily, cancelHideTimer]);
-
-  // Détection des interactions tactiles/souris (première fois seulement) - DÉSACTIVÉ
-  // useEffect(() => {
-  //   if (userInteracted) return;
-  //   
-  //   const handleInteraction = (e: Event) => {
-  //     // Éviter de révéler le menu sur des interactions normales
-  //     if (e.type === 'touchstart' || e.type === 'mousedown') {
-  //       const target = e.target as Element;
-  //       // Seulement si ce n'est pas une interaction avec un élément UI
-  //       if (!target.closest('button, a, input, textarea, select')) {
-  //         console.log('🎯 First meaningful interaction detected');
-  //         showMenuTemporarily();
-  //       }
-  //     } else if (e.type === 'keydown') {
-  //       showMenuTemporarily();
-  //     }
-  //   };
-
-  //   const events = ['touchstart', 'mousedown', 'keydown'];
-  //   events.forEach(event => {
-  //     document.addEventListener(event, handleInteraction, { once: true, passive: true });
-  //   });
-
-  //   return () => {
-  //     events.forEach(event => {
-  //       document.removeEventListener(event, handleInteraction);
-  //     });
-  //   };
-  // }, [userInteracted, showMenuTemporarily]);
-
-  // Afficher le menu quand on survole la zone en bas - DÉSACTIVÉ
-  // useEffect(() => {
-  //   // Vérifier si on est sur desktop
-  //   const isDesktop = !('ontouchstart' in window) && window.innerWidth > 768;
-  //   
-  //   if (!isDesktop) return; // Skip sur mobile/tactile
-  //   
-  //   const handleMouseMove = (e: MouseEvent) => {
-  //     const windowHeight = window.innerHeight;
-  //     const mouseY = e.clientY;
-  //     
-  //     if (mouseY > windowHeight - 80) {
-  //       showMenuTemporarily();
-  //     }
-  //   };
-
-  //   document.addEventListener('mousemove', handleMouseMove, { passive: true });
-  //   return () => {
-  //     document.removeEventListener('mousemove', handleMouseMove);
-  //   };
-  // }, [showMenuTemporarily]);
-
-  // Afficher le menu lors du toucher en bas d'écran - DÉSACTIVÉ pour éviter déclenchements intempestifs
-  // useEffect(() => {
-  //   let startY = 0;
-  //   let startTime = 0;
-  //   
-  //   const handleTouchStart = (e: TouchEvent) => {
-  //     startY = e.touches[0].clientY;
-  //     startTime = Date.now();
-  //   };
-  //   
-  //   const handleTouchEnd = (e: TouchEvent) => {
-  //     const endY = e.changedTouches[0].clientY;
-  //     const endTime = Date.now();
-  //     const windowHeight = window.innerHeight;
-  //     const deltaY = startY - endY;
-  //     const deltaTime = endTime - startTime;
-  //     
-  //     // Vérifier si c'est un swipe up depuis le bas ET rapide
-  //     const isSwipeUp = deltaY > 30 && deltaTime < 500;
-  //     const isFromBottom = startY > windowHeight - 100;
-  //     
-  //     // Seulement révéler le menu si c'est un vrai swipe up depuis le bas
-  //     if (isSwipeUp && isFromBottom) {
-  //       console.log('📱 Swipe up detected from bottom');
-  //       showMenuTemporarily();
-  //     }
-  //   };
-
-  //   document.addEventListener('touchstart', handleTouchStart, { passive: true });
-  //   document.addEventListener('touchend', handleTouchEnd, { passive: true });
-  //   
-  //   return () => {
-  //     document.removeEventListener('touchstart', handleTouchStart);
-  //     document.removeEventListener('touchend', handleTouchEnd);
-  //   };
-  // }, [showMenuTemporarily]);
-
   // Gestion du menu étendu
   useEffect(() => {
     if (isExpanded) {
@@ -313,40 +377,72 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     }
   }, [isExpanded, userInteracted, isHidden, cancelHideTimer, startHideTimer]);
 
-  // Gestion des touches de navigation - LIMITÉ aux touches 1-4 seulement
+  // Gestion des touches de navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Navigation directe avec les touches numériques SANS révéler le menu
-      if (!isExpanded && e.target === document.body) {
+      // Navigation directe avec les touches numériques
+      if (!isExpanded && !isSearchOpen && e.target === document.body) {
         switch (e.key) {
           case '1':
+            console.log('⌨️ Touche 1 - Navigation vers daily');
             onCategoryChange('daily');
+            setIsHidden(true);
+            cancelHideTimer();
             break;
           case '2':
+            console.log('⌨️ Touche 2 - Navigation vers mukhtarat');
             onCategoryChange('mukhtarat');
+            setIsHidden(true);
+            cancelHideTimer();
             break;
           case '3':
+            console.log('⌨️ Touche 3 - Navigation vers favorites');
             onCategoryChange('favorites');
+            setIsHidden(true);
+            cancelHideTimer();
             break;
           case '4':
+            console.log('⌨️ Touche 4 - Navigation vers miraj-arwah');
             onCategoryChange('miraj-arwah');
+            setIsHidden(true);
+            cancelHideTimer();
             break;
           case ' ':
             e.preventDefault();
+            console.log('⌨️ Espace - Toggle menu étendu');
             setIsExpanded(!isExpanded);
+            break;
+          case 'm':
+          case 'M':
+            console.log('⌨️ Touche M - Toggle menu étendu');
+            setIsExpanded(!isExpanded);
+            break;
+          case '/':
+            e.preventDefault();
+            if (shouldShowSearchButton) {
+              console.log('⌨️ Touche / - Ouvrir recherche');
+              setIsSearchOpen(true);
+            }
             break;
         }
       }
       
-      // Fermer le menu étendu avec Escape
-      if (e.key === 'Escape' && isExpanded) {
-        setIsExpanded(false);
+      // Fermer les menus avec Escape
+      if (e.key === 'Escape') {
+        if (isExpanded) {
+          console.log('⌨️ Escape - Fermeture menu général');
+          setIsExpanded(false);
+        }
+        if (isSearchOpen) {
+          console.log('⌨️ Escape - Fermeture recherche');
+          setIsSearchOpen(false);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isExpanded, onCategoryChange]);
+  }, [isExpanded, isSearchOpen, shouldShowSearchButton, onCategoryChange, cancelHideTimer]);
 
   // Nettoyage des timers au démontage
   useEffect(() => {
@@ -361,7 +457,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     <>
       {/* Bouton transparent discret en bas à gauche pour révéler le menu */}
       {isHidden && (
-        <div className="fixed bottom-2 left-0 z-40">
+        <div className="fixed bottom-4 left-4 z-40">
           <button
             onClick={() => {
               console.log('🔘 Bouton + cliqué - Révélation du menu');
@@ -371,9 +467,9 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
               console.log('🔘 Bouton + touché - Révélation du menu');
               showMenuTemporarily();
             }}
-            className="w-6 h-6 bg-gray/10 backdrop-blur-sm rounded-full
-                       hover:bg-gray/20 active:bg-gray/30 active:scale-95 
-                       transition-all duration-200 shadow-lg border border-gray/20
+            className="w-6 h-6 bg-white/10 backdrop-blur-sm rounded-full
+                       hover:bg-white/20 active:bg-white/30 active:scale-95 
+                       transition-all duration-200 shadow-lg border border-white/20
                        flex items-center justify-center"
             aria-label="إظهار القائمة"
             style={{
@@ -382,16 +478,53 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
               touchAction: 'manipulation',
               WebkitTouchCallout: 'none',
               // Zone de touch élargie pour petite taille
-              minHeight: '44px',
-              minWidth: '44px',
+              minHeight: '33px',
+              minWidth: '33px',
               padding: '9px' // Centre le petit bouton dans la zone de touch
             }}
           >
             {/* Icône + */}
-            <div className="text-black/60 text-xs font-bold leading-none">=</div>
+            <div className="text-black/60 text-xm font-bold leading-none">+</div>
           </button>
         </div>
       )}
+
+      {/* BOUTON DE RECHERCHE - Ouvre DIRECTEMENT la modal */}
+      {shouldShowSearchButton && (
+        <div className="fixed bottom-4 right-4 z-40">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('🔍 BOUTON RECHERCHE CLIQUÉ - OUVERTURE MODAL');
+              setIsSearchOpen(true);
+            }}
+            className="w-6 h-6 bg-sky-200 rounded-full
+                       hover:bg-gray-2600 active:bg-gray-700 active:scale-95 
+                       transition-all duration-200 shadow-xl border-2 border-white
+                       flex items-center justify-center"
+            aria-label="بحث مباشر في المكتبة"
+            style={{
+              marginBottom: 'max(2px, env(safe-area-inset-bottom))',
+              touchAction: 'manipulation',
+              minHeight: '33px',
+              minWidth: '33px',
+              zIndex: 9999
+            }}
+          >
+            <Search className="w-7 h-7 text-white" />
+          </button>
+        </div>
+      )}
+
+      {/* Modal de Recherche */}
+      <SearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onSearch={onSearch}
+        searchResultsCount={searchResultsCount}
+        selectedCategory={selectedCategory}
+      />
 
       {/* Overlay pour le menu étendu */}
       {isExpanded && (
@@ -408,112 +541,63 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
         }`}
       >
         {/* Navigation rapide */}
-        <div className="flex items-center justify-end px-4 py-2"> {/* justify-end au lieu de justify-between */}
-          {/* Catégories principales - المزيد supprimé */}
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between px-4 py-2">
+          {/* Bouton المزيد à gauche */}
+          <button
+            onClick={() => {
+              console.log('📋 Bouton المزيد cliqué - Ouverture menu étendu');
+              setIsExpanded(!isExpanded);
+            }}
+            className="nav-button flex flex-col items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all duration-200 active:scale-95"
+            aria-label={isExpanded ? 'إخفاء القائمة' : 'إظهار المزيد'}
+            aria-expanded={isExpanded}
+          >
+            <ChevronUp 
+              className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} 
+            />
+            <span className="text-[9px] font-arabic leading-tight">المزيد</span>
+          </button>
+
+          {/* Catégories principales à droite */}
+          <div className="flex items-center gap-1">
             {quickCategories.map((category) => (
               <button
                 key={category.id}
                 onClick={() => {
+                  console.log(`🎯 Catégorie sélectionnée: ${category.id}`);
                   onCategoryChange(category.id);
-                  showMenuTemporarily();
+                  setIsHidden(true);
+                  cancelHideTimer();
                 }}
-                className={`nav-button flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200 ${
+                className={`nav-button flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition-all duration-200 ${
                   selectedCategory === category.id
-                    ? 'nav-button active bg-sky-50 text-sky-600'
-                    : 'text-gray-600 hover:bg-gray-50 active:scale-95'
+                    ? 'bg-gray-100 text-gray-900'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 active:scale-95'
                 }`}
                 aria-label={`التنقل إلى ${category.name}`}
               >
-                <div className="relative">
-                  {category.icon}
-                  {/* Indicateur de recherche active */}
-                  {category.id === 'mukhtarat' && !!searchTerm && (
-                    <div className="search-indicator"></div>
-                  )}
+                <div className="w-4 h-4 flex items-center justify-center">
+                  {React.cloneElement(category.icon, { className: 'w-4 h-4' })}
                 </div>
-                <span className="text-[10px] font-arabic leading-tight">{category.name}</span>
+                <span className="text-[9px] font-arabic leading-tight">{category.name}</span>
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Menu étendu - déclenché par le bouton transparent */}
+      {/* Menu étendu - UNIQUEMENT paramètres et déconnexion */}
       {isExpanded && (
-        <div className="fixed bottom-16 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-50 max-h-80 overflow-y-auto">
+        <div className="fixed bottom-16 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-50">
           <div className="p-4">
-            {/* Bouton المزيد déplacé dans le menu étendu */}
-            <div className="mb-4 pb-4 border-b border-gray-200">
-              <div className="flex items-center justify-center">
-                <button
-                  onClick={() => setIsExpanded(false)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  <ChevronUp className="w-4 h-4 rotate-180" />
-                  <span className="text-sm font-arabic">إخفاء القائمة</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Section de recherche */}
-            {isSearchEnabled && (
-              <div className="mb-4">
-                <div className="relative">
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    placeholder="بحث في عدة المريد..."
-                    dir="rtl"
-                    className="w-full pl-10 pr-4 py-3 bg-gray-50/80 border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm font-arabic transition-colors"
-                  />
-                  
-                  {/* Icône de recherche ou spinner */}
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                    {isSearching ? (
-                      <div className="w-5 h-5 border-2 border-sky-300 border-t-sky-600 rounded-full animate-spin"></div>
-                    ) : (
-                      <Search className="w-5 h-5 text-gray-400" />
-                    )}
-                  </div>
-                  
-                  {/* Bouton X pour effacer la recherche */}
-                  {!!searchTerm && (
-                    <button
-                      onClick={handleClearSearch}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                      aria-label="Effacer la recherche"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                
-                {/* Affichage du nombre de résultats */}
-                {!!searchTerm && typeof searchResultsCount !== 'undefined' && (
-                  <div className="mt-2 text-center text-xs font-arabic">
-                    {searchResultsCount > 0 ? (
-                      <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                        {searchResultsCount} نتيجة
-                      </span>
-                    ) : (
-                      <span className="text-red-500 bg-red-50 px-3 py-1 rounded-full">
-                        لا توجد نتائج
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Actions principales */}
             <div className="grid grid-cols-1 gap-2">
               <button
                 onClick={() => {
+                  console.log('⚙️ Paramètres sélectionnés - Fermeture du menu');
                   onShowSettings();
                   setIsExpanded(false);
+                  setIsHidden(true);
+                  cancelHideTimer();
                 }}
                 className="flex items-center justify-center gap-3 py-3 px-4 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
               >
@@ -523,8 +607,11 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
               
               <button
                 onClick={() => {
+                  console.log('🚪 Déconnexion sélectionnée - Fermeture du menu');
                   logout();
                   setIsExpanded(false);
+                  setIsHidden(true);
+                  cancelHideTimer();
                 }}
                 className="flex items-center justify-center gap-3 py-3 px-4 rounded-lg hover:bg-gray-50 text-red-600 transition-colors"
               >
