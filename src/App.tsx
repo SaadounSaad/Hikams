@@ -21,6 +21,7 @@ import MukhtaratPage from './components/MukhtaratPage';
 import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
 import { arabicTextContains } from './utils/arabic-search-utils';
 
+
 // Composant Menu Déroulant Mukhtarat
 const MukhtaratDropdownMenu = ({ 
   onShowAll, 
