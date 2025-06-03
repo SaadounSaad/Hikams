@@ -1,6 +1,6 @@
 // BottomNavigation.tsx - Menu de navigation en bas auto-masqué avec modal de recherche
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp, HandHelping, BookOpen } from 'lucide-react';
+import { Search, Calendar, Heart, Star, Settings, LogOut, X, ChevronUp, HandHelping, BookOpen, BarChart3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // Composant indicateur d'aide
@@ -358,12 +358,14 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     }
   }, [isExpanded, cancelHideTimer]);
 
-    // Catégories principales pour navigation rapide
-  const quickCategories = [
-    { id: 'miraj-arwah', name: 'الورد', icon: <HandHelping className="w-5 h-5" /> },
-    { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
-    { id: 'mukhtarat', name: 'المكتبة', icon: <BookOpen className="w-5 h-5" /> },
-    { id: 'daily', name: 'اليومية', icon: <Calendar className="w-5 h-5" /> }
+// Catégories principales pour navigation rapide
+const quickCategories = [
+    { id: 'analytics', name: 'الإحصائيات', icon: <BarChart3 className="w-5 h-5" /> }, // NOUVELLE LIGNE
+  { id: 'miraj-arwah', name: 'الورد', icon: <HandHelping className="w-5 h-5" /> },
+  { id: 'favorites', name: 'المفضلة', icon: <Heart className="w-5 h-5" /> },
+  { id: 'mukhtarat', name: 'المكتبة', icon: <BookOpen className="w-5 h-5" /> },
+
+  { id: 'daily', name: 'اليومية', icon: <Calendar className="w-5 h-5" /> }
 ];
   // Gestion du menu étendu
   useEffect(() => {
@@ -404,6 +406,12 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           case '4':
             console.log('⌨️ Touche 4 - Navigation vers miraj-arwah');
             onCategoryChange('miraj-arwah');
+            setIsHidden(true);
+            cancelHideTimer();
+            break;
+          case '5':
+            console.log('⌨️ Touche 5 - Navigation vers analytics');
+            onCategoryChange('analytics');
             setIsHidden(true);
             cancelHideTimer();
             break;

@@ -1,9 +1,10 @@
-// src/components/QuoteViewer.tsx - Version avec navigation swipe optimisée
+// src/components/QuoteViewer.tsx - Version avec hooks fixes FINAL
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
 import { QuoteCard } from './QuoteCard';
 import { updateBookmark, getSavedPageIndex } from '../utils/bookmarkService';
+import { useAnalytics } from '../context/AnalyticsContext';
 
 interface QuoteViewerProps {
   quotes: Quote[];
@@ -100,22 +101,131 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   searchTerm,
   renderExtraControls,
 }) => {
+  // ✅ CRITIQUE: Tous les hooks DOIVENT être appelés avant tout return conditionnel
   const [bookmarkIndex, setBookmarkIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const { trackEvent } = useAnalytics();
 
-  // Gestion de la navigation par swipe
+  // ✅ AMÉLIORATION: Tracking du temps de lecture avec timer
+  const readingTimerRef = useRef<number | null>(null);
+  const quoteStartTimeRef = useRef<number>(Date.now());
+  const lastTrackedQuoteRef = useRef<string | null>(null);
+
+  // ✅ AMÉLIORATION: Fonction de tracking de lecture avec temps réel
+  const handleQuoteView = useCallback((quote: Quote, readingTime?: number) => {
+    // Éviter le double tracking de la même citation
+    if (lastTrackedQuoteRef.current === quote.id) return;
+
+    trackEvent('quote_read', {
+      quote_id: quote.id,
+      category: quote.category,
+      text_length: quote.text?.length || 0,
+      is_favorite: quote.isFavorite || false,
+      read_duration_seconds: readingTime || 3, // Temps estimé ou réel
+      navigation_method: 'manual', // sera modifié selon le contexte
+      search_result: !!searchTerm,
+      quote_index: currentIndex,
+      total_quotes: quotes.length,
+      timestamp: new Date().toISOString()
+    });
+
+    lastTrackedQuoteRef.current = quote.id;
+  }, [trackEvent, searchTerm, currentIndex, quotes.length]);
+
+  // ✅ AMÉLIORATION: Wrapper pour onToggleFavorite avec tracking
+  const handleToggleFavoriteWithTracking = useCallback(async (id: string) => {
+    const quote = quotes.find(q => q.id === id);
+    if (!quote) return;
+
+    const newFavoriteStatus = !quote.isFavorite;
+    
+    try {
+      // ✅ TRACKING AVANT l'action avec plus de détails
+      trackEvent('quote_favorite_toggle', {
+        quote_id: id,
+        category: quote.category,
+        action: newFavoriteStatus ? 'add' : 'remove',
+        quote_text_preview: quote.text?.substring(0, 50) + '...',
+        current_index: currentIndex,
+        selected_category: selectedCategory,
+        navigation_context: searchTerm ? 'search_results' : 'normal_browse',
+        search_term: searchTerm,
+        timestamp: new Date().toISOString()
+      });
+
+      // Appeler la fonction originale
+      await onToggleFavorite(id);
+      
+      // ✅ TRACKING de succès
+      trackEvent('quote_favorite_success', {
+        quote_id: id,
+        category: quote.category,
+        new_status: newFavoriteStatus ? 'favorited' : 'unfavorited',
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log(`✅ Favori ${newFavoriteStatus ? 'ajouté' : 'retiré'} avec succès`);
+      
+    } catch (error) {
+      // ✅ TRACKING des erreurs
+      trackEvent('quote_favorite_error', {
+        quote_id: id,
+        category: quote.category,
+        intended_action: newFavoriteStatus ? 'add' : 'remove',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+      
+      console.error('❌ Erreur lors du toggle favori:', error);
+    }
+  }, [quotes, currentIndex, selectedCategory, searchTerm, trackEvent, onToggleFavorite]);
+
+  // ✅ AMÉLIORATION: Wrapper pour les actions d'édition/suppression
+  const handleEditWithTracking = useCallback((quote: Quote) => {
+    trackEvent('quote_edit_initiated', {
+      quote_id: quote.id,
+      category: quote.category,
+      current_index: currentIndex,
+      timestamp: new Date().toISOString()
+    });
+    onEdit(quote);
+  }, [trackEvent, currentIndex, onEdit]);
+
+  const handleDeleteWithTracking = useCallback((id: string) => {
+    const quote = quotes.find(q => q.id === id);
+    trackEvent('quote_delete_initiated', {
+      quote_id: id,
+      category: quote?.category || selectedCategory,
+      current_index: currentIndex,
+      timestamp: new Date().toISOString()
+    });
+    onDelete(id);
+  }, [quotes, selectedCategory, currentIndex, trackEvent, onDelete]);
+
+  // ✅ AMÉLIORATION: Gestion du swipe avec tracking de navigation
   const handleSwipeLeft = useCallback(() => {
     if (quotes.length === 0 || isTransitioning) return;
     
     setIsTransitioning(true);
     const newIndex = currentIndex < quotes.length - 1 ? currentIndex + 1 : 0;
     
+    // Tracker la navigation
+    trackEvent('quote_navigation', {
+      direction: 'next',
+      method: 'swipe',
+      from_index: currentIndex,
+      to_index: newIndex,
+      category: selectedCategory,
+      is_wraparound: newIndex === 0 && currentIndex === quotes.length - 1,
+      timestamp: new Date().toISOString()
+    });
+    
     setTimeout(() => {
       onIndexChange(newIndex);
       setIsTransitioning(false);
     }, 150);
-  }, [quotes.length, currentIndex, onIndexChange, isTransitioning]);
+  }, [quotes.length, currentIndex, onIndexChange, isTransitioning, selectedCategory, trackEvent]);
 
   const handleSwipeRight = useCallback(() => {
     if (quotes.length === 0 || isTransitioning) return;
@@ -123,11 +233,22 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     setIsTransitioning(true);
     const newIndex = currentIndex > 0 ? currentIndex - 1 : quotes.length - 1;
     
+    // Tracker la navigation
+    trackEvent('quote_navigation', {
+      direction: 'previous',
+      method: 'swipe',
+      from_index: currentIndex,
+      to_index: newIndex,
+      category: selectedCategory,
+      is_wraparound: newIndex === quotes.length - 1 && currentIndex === 0,
+      timestamp: new Date().toISOString()
+    });
+    
     setTimeout(() => {
       onIndexChange(newIndex);
       setIsTransitioning(false);
     }, 150);
-  }, [quotes.length, currentIndex, onIndexChange, isTransitioning]);
+  }, [quotes.length, currentIndex, onIndexChange, isTransitioning, selectedCategory, trackEvent]);
 
   // Hook pour la détection des swipes
   const swipeContainerRef = useSwipeNavigation(
@@ -135,6 +256,126 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     handleSwipeRight,
     quotes.length > 1 && !isTransitioning
   );
+
+  // ✅ AMÉLIORATION: Navigation avec tracking
+  const handleNavigateToFirst = useCallback(() => {
+    if (quotes.length > 0 && !isTransitioning) {
+      setIsTransitioning(true);
+      
+      trackEvent('quote_navigation', {
+        direction: 'first',
+        method: 'button',
+        from_index: currentIndex,
+        to_index: 0,
+        category: selectedCategory,
+        timestamp: new Date().toISOString()
+      });
+      
+      setTimeout(() => {
+        onIndexChange(0);
+        setIsTransitioning(false);
+      }, 150);
+    }
+  }, [quotes.length, isTransitioning, currentIndex, selectedCategory, trackEvent, onIndexChange]);
+
+  const handleNavigateToLast = useCallback(() => {
+    if (quotes.length > 0 && !isTransitioning) {
+      setIsTransitioning(true);
+      const last = quotes.length - 1;
+      
+      trackEvent('quote_navigation', {
+        direction: 'last',
+        method: 'button',
+        from_index: currentIndex,
+        to_index: last,
+        category: selectedCategory,
+        timestamp: new Date().toISOString()
+      });
+      
+      setTimeout(() => {
+        onIndexChange(last);
+        setIsTransitioning(false);
+      }, 150);
+    }
+  }, [quotes.length, isTransitioning, currentIndex, selectedCategory, trackEvent, onIndexChange]);
+
+  // ✅ AMÉLIORATION: Bookmark avec tracking
+  const handleManualBookmark = useCallback(async () => {
+    if (quotes.length === 0) return;
+    
+    trackEvent('bookmark_created', {
+      quote_id: quotes[currentIndex]?.id,
+      category: selectedCategory,
+      quote_index: currentIndex,
+      bookmark_type: 'manual',
+      timestamp: new Date().toISOString()
+    });
+    
+    await updateBookmark(selectedCategory, currentIndex);
+    setBookmarkIndex(currentIndex);
+  }, [quotes, currentIndex, selectedCategory, trackEvent]);
+
+  const handleSwipe = useCallback((direction: 'left' | 'right') => {
+    if (direction === 'left') {
+      handleSwipeLeft();
+    } else {
+      handleSwipeRight();
+    }
+  }, [handleSwipeLeft, handleSwipeRight]);
+
+  // ✅ AMÉLIORATION: Tracking session avec plus de détails
+  useEffect(() => {
+    // Tracker le début de session dans cette catégorie
+    trackEvent('quote_session_start', {
+      category: selectedCategory,
+      total_quotes: quotes.length,
+      has_search: !!searchTerm,
+      search_term: searchTerm,
+      timestamp: new Date().toISOString()
+    });
+
+    return () => {
+      // Tracker la fin de session
+      trackEvent('quote_session_end', {
+        category: selectedCategory,
+        session_duration_seconds: Math.round((Date.now() - quoteStartTimeRef.current) / 1000),
+        quotes_viewed: lastTrackedQuoteRef.current ? 1 : 0
+      });
+    };
+  }, [selectedCategory, quotes.length, searchTerm, trackEvent]);
+
+  // ✅ AMÉLIORATION: Tracking du temps de lecture par citation
+  useEffect(() => {
+    const currentQuote = quotes[currentIndex];
+    if (!currentQuote) return;
+
+    // Démarrer le timer pour cette citation
+    quoteStartTimeRef.current = Date.now();
+    
+    // Nettoyer le timer précédent
+    if (readingTimerRef.current) {
+      clearTimeout(readingTimerRef.current);
+    }
+
+    // Timer pour tracker automatiquement après 3 secondes
+    readingTimerRef.current = window.setTimeout(() => {
+      const readingTime = Math.round((Date.now() - quoteStartTimeRef.current) / 1000);
+      handleQuoteView(currentQuote, readingTime);
+    }, 3000);
+
+    // Nettoyage lors du changement de citation
+    return () => {
+      if (readingTimerRef.current) {
+        clearTimeout(readingTimerRef.current);
+        
+        // Tracker le temps de lecture si la citation a été vue assez longtemps
+        const readingTime = Math.round((Date.now() - quoteStartTimeRef.current) / 1000);
+        if (readingTime >= 1) {
+          handleQuoteView(currentQuote, readingTime);
+        }
+      }
+    };
+  }, [currentIndex, quotes, handleQuoteView]);
 
   // Correction: S'assurer que currentIndex est dans les limites valides
   useEffect(() => {
@@ -159,64 +400,43 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     fetchBookmark();
   }, [selectedCategory]);
 
-  const handleSwipe = (direction: 'left' | 'right') => {
-    if (direction === 'left') {
-      handleSwipeLeft();
-    } else {
-      handleSwipeRight();
-    }
-  };
-
-  const handleNavigateToFirst = () => {
-    if (quotes.length > 0 && !isTransitioning) {
-      setIsTransitioning(true);
-      setTimeout(() => {
-        onIndexChange(0);
-        setIsTransitioning(false);
-      }, 150);
-    }
-  };
-
-  const handleNavigateToLast = () => {
-    if (quotes.length > 0 && !isTransitioning) {
-      setIsTransitioning(true);
-      const last = quotes.length - 1;
-      setTimeout(() => {
-        onIndexChange(last);
-        setIsTransitioning(false);
-      }, 150);
-    }
-  };
-
-  const handleManualBookmark = async () => {
-    if (quotes.length === 0) return;
-    
-    await updateBookmark(selectedCategory, currentIndex);
-    setBookmarkIndex(currentIndex);
-  };
-
-  // Navigation clavier
+  // ✅ AMÉLIORATION: Navigation clavier avec tracking
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isTransitioning) return;
+
+      const trackKeyboardNavigation = (direction: string) => {
+        trackEvent('quote_navigation', {
+          direction,
+          method: 'keyboard',
+          key: e.key,
+          from_index: currentIndex,
+          category: selectedCategory,
+          timestamp: new Date().toISOString()
+        });
+      };
 
       switch (e.key) {
         case 'ArrowLeft':
         case 'h':
           e.preventDefault();
+          trackKeyboardNavigation('previous');
           handleSwipeRight();
           break;
         case 'ArrowRight':
         case 'l':
           e.preventDefault();
+          trackKeyboardNavigation('next');
           handleSwipeLeft();
           break;
         case 'Home':
           e.preventDefault();
+          trackKeyboardNavigation('first');
           handleNavigateToFirst();
           break;
         case 'End':
           e.preventDefault();
+          trackKeyboardNavigation('last');
           handleNavigateToLast();
           break;
       }
@@ -224,7 +444,34 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isTransitioning, handleSwipeLeft, handleSwipeRight]);
+  }, [isTransitioning, handleSwipeLeft, handleSwipeRight, handleNavigateToFirst, handleNavigateToLast, currentIndex, selectedCategory, trackEvent]);
+
+  // ✅ AMÉLIORATION: Tracking des recherches
+  useEffect(() => {
+    if (searchTerm) {
+      trackEvent('search_performed', {
+        search_term: searchTerm,
+        category: selectedCategory,
+        results_count: quotes.length,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [searchTerm, selectedCategory, quotes.length, trackEvent]);
+
+  // ✅ CORRECTION CRITIQUE: Tracker l'état vide AVANT les returns conditionnels
+  useEffect(() => {
+    if (quotes.length === 0) {
+      trackEvent('empty_state_viewed', {
+        category: selectedCategory,
+        has_search: !!searchTerm,
+        search_term: searchTerm,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [quotes.length, selectedCategory, searchTerm, trackEvent]);
+
+  // ✅ CORRECTION CRITIQUE: Hooks appelés AVANT tous les returns
+  // Maintenant nous pouvons faire les returns conditionnels en sécurité
 
   // Si aucune citation n'est disponible
   if (quotes.length === 0) {
@@ -275,8 +522,6 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           </div>
         </div>
       )}
-
-      
 
       {/* Barre de navigation avec menu mukhtarat intégré */}
       <div className="flex items-center justify-between mb-4">
@@ -380,9 +625,9 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
         {currentQuote ? (
           <QuoteCard
             quote={currentQuote}
-            onToggleFavorite={onToggleFavorite}
-            onEdit={onEdit}
-            onDelete={onDelete}
+            onToggleFavorite={handleToggleFavoriteWithTracking}
+            onEdit={handleEditWithTracking}
+            onDelete={handleDeleteWithTracking}
             onSwipe={handleSwipe}
             searchTerm={searchTerm}
           />
@@ -392,8 +637,6 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           </div>
         )}
       </div>
-
-      
     </div>
   );
 };

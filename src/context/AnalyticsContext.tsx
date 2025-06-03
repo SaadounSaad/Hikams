@@ -1,129 +1,207 @@
-// /home/ubuntu/src/contexts/AnalyticsContext.tsx
-import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo, useCallback } from "react";
-import { SupabaseClient } from "@supabase/supabase-js";
-import { AnalyticsService } from "../services/analytics/AnalyticsService";
-// Assuming an AuthContext exists and provides user info and the Supabase client
-// Adjust the import path and hook name as per your project structure
-import { useAuth } from "./AuthContext"; 
+// context/AnalyticsContext.tsx - Version mise à jour
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { AnalyticsService } from '../services/analytics/AnalyticsService';
+import { useAuth } from './AuthContext';
 
+// Interface mise à jour du contexte
 interface AnalyticsContextProps {
-  analytics: AnalyticsService | null;
   trackEvent: (type: string, payload?: Record<string, any>) => Promise<void>;
+  analytics: AnalyticsService | null; // ✅ NOUVEAU: Exposer le service
+  isInitialized: boolean;
+  syncEnabled: boolean;
   setSyncEnabled: (enabled: boolean) => void;
-  isSyncEnabled: boolean;
+  getQueueStats: () => any;
+  
+  forcSync: () => Promise<void>; // ✅ NOUVEAU: Exposer forcSync
+  processOfflineEvents: () => Promise<void>; // ✅ NOUVEAU: Exposer processOfflineEvents
 }
 
 const AnalyticsContext = createContext<AnalyticsContextProps | undefined>(undefined);
 
-interface AnalyticsProviderProps {
-  children: ReactNode;
-  // Pass Supabase client explicitly if not available via AuthContext
-  // supabaseClient: SupabaseClient;
-}
+export function AnalyticsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const [analytics, setAnalytics] = useState<AnalyticsService | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [syncEnabled, setSyncEnabledState] = useState(true);
 
-export const AnalyticsProvider = ({ children }: AnalyticsProviderProps) => {
-  // Get user and Supabase client from AuthContext
-  // Adjust this based on your actual AuthContext implementation
-  const { user, supabaseClient } = useAuth(); 
-  const [analyticsService, setAnalyticsService] = useState<AnalyticsService | null>(null);
-  const [isSyncEnabledState, setIsSyncEnabledState] = useState<boolean>(true); // Default to enabled
-
-  // Initialize AnalyticsService once Supabase client is available
+  // Initialiser le service analytics
   useEffect(() => {
-    if (supabaseClient && !analyticsService) {
-      console.log("Initializing Analytics Service...");
-      const service = new AnalyticsService(supabaseClient, user?.id);
-      setAnalyticsService(service);
+    async function initAnalytics() {
+      try {
+        const { supabase } = await import('../lib/supabase');
+        const service = new AnalyticsService(supabase, user?.id);
+        
+        setAnalytics(service);
+        setIsInitialized(true);
+        
+        // Démarrer la sync périodique
+        service.startPeriodicSync();
+        
+        console.log('🚀 AnalyticsService initialized successfully');
+      } catch (error) {
+        console.error('❌ Failed to initialize AnalyticsService:', error);
+        setIsInitialized(true); // Marquer comme initialisé même en cas d'erreur
+      }
+    }
 
-      // Start periodic sync
-      service.startPeriodicSync();
+    initAnalytics();
 
-      // Set initial sync enabled state (could be loaded from user settings)
-      // For now, just set it based on the default state
-      service.setSyncEnabled(isSyncEnabledState);
+    // Cleanup au démontage
+    return () => {
+      if (analytics) {
+        analytics.cleanup();
+      }
+    };
+  }, [user?.id]);
 
-      // Cleanup function
+  // Mettre à jour l'userId quand l'utilisateur change
+  useEffect(() => {
+    if (analytics && user?.id) {
+      analytics.setUserId(user.id);
+    }
+  }, [analytics, user?.id]);
+
+  // Fonction pour tracker un événement
+  const trackEvent = async (type: string, payload: Record<string, any> = {}) => {
+    if (!analytics) {
+      console.warn('📊 Analytics not initialized, event not tracked:', type);
+      return;
+    }
+
+    try {
+      await analytics.trackEvent(type, payload);
+    } catch (error) {
+      console.error('❌ Failed to track event:', type, error);
+    }
+  };
+
+  // Fonction pour activer/désactiver la sync
+  const setSyncEnabled = (enabled: boolean) => {
+    setSyncEnabledState(enabled);
+    if (analytics) {
+      analytics.setSyncEnabled(enabled);
+    }
+  };
+
+  // Fonction pour obtenir les stats de la queue
+  const getQueueStats = () => {
+    return analytics?.getQueueStats() || {
+      queueSize: 0,
+      syncEnabled: false,
+      sessionId: '',
+      isOnline: false,
+      syncInProgress: false
+    };
+  };
+
+  // Fonction pour forcer la synchronisation
+  const forcSync = async () => {
+    if (!analytics) {
+      throw new Error('Analytics service not initialized');
+    }
+    return analytics.forcSync();
+  };
+
+  // Fonction pour traiter les événements offline
+  const processOfflineEvents = async () => {
+    if (!analytics) {
+      throw new Error('Analytics service not initialized');
+    }
+    return analytics.processQueuedEvents();
+  };
+
+  // ✅ NOUVEAU: Interface de debug globale
+  useEffect(() => {
+    if (analytics && typeof trackEvent === 'function') {
+      (window as any).debugAnalytics = {
+        service: analytics,
+        trackEvent,
+        forcSync: async () => {
+          try {
+            await analytics.forcSync();
+            console.log('✅ Force sync completed');
+          } catch (error) {
+            console.error('❌ Force sync failed:', error);
+            throw error;
+          }
+        },
+        setSyncEnabled: (enabled: boolean) => {
+          analytics.setSyncEnabled(enabled);
+          console.log('🔄 Sync enabled:', enabled);
+        },
+        getStats: () => analytics.getQueueStats(),
+        processOfflineEvents: async () => {
+          try {
+            await analytics.processQueuedEvents();
+            console.log('✅ Offline events processed');
+          } catch (error) {
+            console.error('❌ Failed to process offline events:', error);
+            throw error;
+          }
+        },
+        // Méthodes de debug supplémentaires
+        getKPIs: async (startDate?: Date, endDate?: Date) => {
+          try {
+            const kpis = await analytics.getMyKPIs(startDate, endDate);
+            console.log('📊 KPIs:', kpis);
+            return kpis;
+          } catch (error) {
+            console.error('❌ Failed to get KPIs:', error);
+            throw error;
+          }
+        },
+        trackTestEvent: () => {
+          trackEvent('debug_test', {
+            test_data: 'Hello from debug',
+            timestamp: new Date().toISOString()
+          });
+          console.log('🧪 Test event tracked');
+        }
+      };
+
+      // Cleanup debug interface
       return () => {
-        console.log("Cleaning up Analytics Service in Provider...");
-        service.cleanup();
-        setAnalyticsService(null); // Clear service on unmount
+        delete (window as any).debugAnalytics;
       };
     }
-    // Add dependency on supabaseClient to re-init if it changes (unlikely but safe)
-  }, [supabaseClient, user?.id]); // Re-run if supabaseClient or initial user changes
+  }, [analytics, trackEvent]);
 
-  // Update userId in AnalyticsService when auth state changes
-  useEffect(() => {
-    if (analyticsService) {
-      analyticsService.setUserId(user?.id);
-    }
-  }, [user, analyticsService]);
-
-  // Memoized trackEvent function to provide a stable reference
-  const trackEvent = useCallback(async (type: string, payload?: Record<string, any>) => {
-    if (analyticsService) {
-      await analyticsService.trackEvent(type, payload);
-    } else {
-      console.warn("Analytics service not ready, event not tracked:", type, payload);
-      // Optionally queue events here if needed before service is ready
-    }
-  }, [analyticsService]);
-
-  // Function to control sync preference
-  const setSyncEnabled = useCallback((enabled: boolean) => {
-    if (analyticsService) {
-      analyticsService.setSyncEnabled(enabled);
-      setIsSyncEnabledState(enabled);
-      // Persist this setting (e.g., in localStorage or user profile)
-    }
-  }, [analyticsService]);
-
-  // Context value
-  const value = useMemo(() => ({
-    analytics: analyticsService,
+  const value: AnalyticsContextProps = {
     trackEvent,
+    analytics, // ✅ NOUVEAU: Exposer le service
+    isInitialized,
+    syncEnabled,
     setSyncEnabled,
-    isSyncEnabled: isSyncEnabledState,
-  }), [analyticsService, trackEvent, setSyncEnabled, isSyncEnabledState]);
+    getQueueStats,
+    forcSync, // ✅ NOUVEAU: Exposer forcSync
+    processOfflineEvents // ✅ NOUVEAU: Exposer processOfflineEvents
+  };
 
   return (
     <AnalyticsContext.Provider value={value}>
       {children}
     </AnalyticsContext.Provider>
   );
-};
+}
 
-// Custom hook to use the AnalyticsContext
-export const useAnalytics = (): AnalyticsContextProps => {
+export function useAnalytics() {
   const context = useContext(AnalyticsContext);
   if (context === undefined) {
-    throw new Error("useAnalytics must be used within an AnalyticsProvider");
+    throw new Error('useAnalytics must be used within an AnalyticsProvider');
   }
-  // Return a default/mock object if service isn't ready? Or let consumers handle null?
-  // Current approach returns the context as is, consumers check for analytics !== null
-  // Or use the provided trackEvent function which handles the null check.
   return context;
-};
+}
 
-// Example of how to wrap your app:
-//
-// <AuthProvider>
-//   <AnalyticsProvider>
-//     <App />
-//   </AnalyticsProvider>
-// </AuthProvider>
-//
-// Example usage in a component:
-//
-// import { useAnalytics } from "../contexts/AnalyticsContext";
-//
-// function MyComponent() {
-//   const { trackEvent } = useAnalytics();
-//
-//   const handleButtonClick = () => {
-//     trackEvent("button_click", { buttonName: "submit" });
-//   };
-//
-//   return <button onClick={handleButtonClick}>Submit</button>;
-// }
+// ✅ NOUVEAU: Hook personnalisé pour accéder facilement aux KPIs
+export function useAnalyticsKPIs() {
+  const { analytics } = useAnalytics();
+  
+  const getKPIs = async (startDate?: Date, endDate?: Date) => {
+    if (!analytics) {
+      throw new Error('Analytics service not available');
+    }
+    return analytics.getMyKPIs(startDate, endDate);
+  };
 
+  return { getKPIs, isAvailable: !!analytics };
+}

@@ -1,12 +1,13 @@
-// AuthContext.tsx CORRIGÉ - avec objet user
+// AuthContext.tsx CORRIGÉ - avec objet user et client Supabase
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import type { User } from '@supabase/supabase-js';
+import type { User, SupabaseClient } from '@supabase/supabase-js';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  user: User | null; // ← AJOUTÉ: Objet user complet
+  user: User | null;
+  supabase: SupabaseClient; // ← AJOUTÉ: Client Supabase
   logout: () => Promise<void>;
 }
 
@@ -16,7 +17,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [user, setUser] = useState<User | null>(null); // ← AJOUTÉ: État user
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const {
@@ -24,7 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('🔄 Auth state changed:', { event: _event, hasSession: !!session });
       setIsAuthenticated(!!session);
-      setUser(session?.user ?? null); // ← AJOUTÉ: Mise à jour de user
+      setUser(session?.user ?? null);
       setIsLoading(false);
     });
 
@@ -32,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('🔄 Initial session:', { hasSession: !!session, userId: session?.user?.id });
       setIsAuthenticated(!!session);
-      setUser(session?.user ?? null); // ← AJOUTÉ: Mise à jour de user
+      setUser(session?.user ?? null);
       setIsLoading(false);
     });
 
@@ -54,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // ← AJOUTÉ: Log pour debug
+  // Log pour debug
   useEffect(() => {
     console.log('👤 Auth Context State:', {
       isAuthenticated,
@@ -69,7 +70,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         isAuthenticated,
         isLoading,
-        user, // ← AJOUTÉ: Exposer user
+        user,
+        supabase, // ← AJOUTÉ: Exposer le client Supabase
         logout
       }}
     >
