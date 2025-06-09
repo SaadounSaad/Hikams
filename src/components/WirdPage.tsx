@@ -168,41 +168,51 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
     }, 5000);
   }, [isScrolling]);
 
-  // Fonction pour gérer le comportement tactile amélioré
-  const handleContentTap = useCallback(() => {
+  // Fonction pour gérer le comportement tactile corrigé
+  const handleContentTap = useCallback((e: React.MouseEvent) => {
     if (!isReading) return;
-    
-    const now = Date.now();
-    const timeSinceLastTap = now - lastTapTimeRef.current;
     
     // Empêcher les actions secondaires dues à la propagation d'événements
     if (isTouchActionRef.current) {
       isTouchActionRef.current = false;
       return;
     }
+
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapTimeRef.current;
     
-    // Double tap (moins de 300ms entre deux taps)
-    if (timeSinceLastTap < 300) {
-      // Second tap - basculer l'état de lecture et cacher les contrôles
-      if (showControls) {
-        setIsScrolling(true);
-        setShowControls(false);
-      }
-    } else {
-      // Premier tap - mettre en pause et montrer les contrôles
-      setIsScrolling(false);
-      setShowControls(true);
+    console.log('Tap détecté, temps depuis dernier tap:', timeSinceLastTap);
+    
+    // Double tap (moins de 400ms entre deux taps pour être plus permissif)
+    if (timeSinceLastTap < 400 && timeSinceLastTap > 50) {
+      console.log('Double tap détecté - reprendre lecture');
+      // Double tap - reprendre la lecture et masquer les contrôles
+      setIsScrolling(true);
+      setShowControls(false);
       
-      // Ne pas configurer de timeout pour masquer les contrôles - ils resteront
-      // visibles jusqu'au second tap
+      // Annuler tout timeout de masquage des contrôles
       if (controlsTimeoutRef.current) {
         window.clearTimeout(controlsTimeoutRef.current);
         controlsTimeoutRef.current = null;
       }
+      
+      // Réinitialiser pour éviter les triple taps
+      lastTapTimeRef.current = 0;
+    } else {
+      console.log('Premier tap - pause et montrer contrôles');
+      // Premier tap - mettre en pause et montrer les contrôles
+      setIsScrolling(false);
+      setShowControls(true);
+      
+      // Ne pas configurer de timeout pour masquer les contrôles
+      if (controlsTimeoutRef.current) {
+        window.clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
+      
+      lastTapTimeRef.current = now;
     }
-    
-    lastTapTimeRef.current = now;
-  }, [isReading, showControls]);
+  }, [isReading]);
 
   // Gestionnaire d'événements pour les boutons de contrôle
   const handleControlButtonClick = useCallback(() => {
@@ -414,12 +424,15 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
             </div>
           </header>
 
-          {/* Zone de contenu défilante - avec un positionnement pour être sous le header fixe */}
+          {/* Zone de contenu défilante - structure améliorée */}
           <div 
             ref={contentScrollRef} 
             className="flex-1 overflow-y-auto px-6 py-8"
             onClick={handleContentTap}
-            style={{ marginTop: '64px', height: 'calc(100% - 64px)' }} // Ajuster selon la hauteur de votre header
+            style={{ 
+              minHeight: '100vh',
+              paddingBottom: '120px' // Espace pour les contrôles en bas
+            }}
           >
             <div
               className="whitespace-pre-wrap mx-auto max-w-3xl font-arabic" 
@@ -444,11 +457,33 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
             >
               <X className="w-6 h-6" />
             </button>
-          {/* Contrôles */}
+          {/* Contrôles - avec structure améliorée */}
           {showControls && (
             <div className="fixed bottom-16 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
+              {/* Contrôles de taille de texte */}
+              <div className="flex gap-1 px-2 border-r border-gray-200">
+                <button 
+                  onClick={decreaseTextSizeWithTracking} 
+                  className="p-3 text-gray-600 hover:text-blue-600"
+                  title="Diminuer la taille du texte"
+                >
+                  <Minus className="w-5 h-5" />
+                </button>
+                <div className="flex items-center px-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
+                  </span>
+                </div>
+                <button 
+                  onClick={increaseTextSizeWithTracking} 
+                  className="p-3 text-gray-600 hover:text-blue-600"
+                  title="Augmenter la taille du texte"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
               
-              
+              {/* Contrôles de vitesse */}
               <div className="flex gap-1 px-2 border-r border-gray-200">
                 <button 
                   onClick={decreaseSpeedWithTracking} 
@@ -471,6 +506,7 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
                 </button>
               </div>
               
+              {/* Contrôle de lecture/pause */}
               <div className="flex gap-1 px-2">
                 <button 
                   onClick={toggleScroll} 
