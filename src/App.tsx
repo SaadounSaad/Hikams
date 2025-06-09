@@ -70,6 +70,10 @@ const MukhtaratDropdownMenu = ({
 
       {isOpen && (
         <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4fde9547a7279129c3de54a4da8253b7b1f441af
 
           <button
             onClick={() => handleOptionClick(onShowMukhtaratPage)}
