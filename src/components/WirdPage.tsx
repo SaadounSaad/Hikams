@@ -169,7 +169,6 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
   }, [isScrolling]);
 
   // Fonction pour gérer le comportement tactile amélioré
-  // CORRECTION POUR WIRDPAGE - handleContentTap
   const handleContentTap = useCallback(() => {
     if (!isReading) return;
     
@@ -184,15 +183,18 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
     
     // Double tap (moins de 300ms entre deux taps)
     if (timeSinceLastTap < 300) {
-      // CORRECTION: Second tap - toujours reprendre la lecture et cacher les contrôles
-      setIsScrolling(true);
-      setShowControls(false);
+      // Second tap - basculer l'état de lecture et cacher les contrôles
+      if (showControls) {
+        setIsScrolling(true);
+        setShowControls(false);
+      }
     } else {
       // Premier tap - mettre en pause et montrer les contrôles
       setIsScrolling(false);
       setShowControls(true);
       
-      // Ne pas configurer de timeout pour masquer les contrôles automatiquement
+      // Ne pas configurer de timeout pour masquer les contrôles - ils resteront
+      // visibles jusqu'au second tap
       if (controlsTimeoutRef.current) {
         window.clearTimeout(controlsTimeoutRef.current);
         controlsTimeoutRef.current = null;
@@ -200,7 +202,7 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
     }
     
     lastTapTimeRef.current = now;
-  }, [isReading]);
+  }, [isReading, showControls]);
 
   // Gestionnaire d'événements pour les boutons de contrôle
   const handleControlButtonClick = useCallback(() => {
@@ -260,15 +262,35 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
           <header className="py-4 px-6 flex items-center justify-between border-b">
             <button 
               onClick={onBack}
-              className="p-2 rounded-full hover:bg-gray-100"
+              className="p-1 rounded-full hover:bg-gray-100"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             
             <h1 className="text-2xl font-bold font-arabic flex-1 text-center" dir="rtl">
-              {wird ? `ورد يوم ${getDayNameInArabic(currentDay)}` : 'الورد اليومي'}
+              {wird ? ` ${getDayNameInArabic(currentDay)}` : '  '}
             </h1>
-            
+            <div className="flex gap-1 px-1 border-r border-gray-200">
+                <button 
+                  onClick={decreaseTextSizeWithTracking} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title="Diminuer la taille du texte"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <div className="flex items-center px-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
+                  </span>
+                </div>
+                <button 
+                  onClick={increaseTextSizeWithTracking} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title="Augmenter la taille du texte"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
             <div className="flex items-center space-x-2">
               <button 
                 onClick={() => navigateToDay(1)} 
@@ -425,27 +447,7 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
           {/* Contrôles */}
           {showControls && (
             <div className="fixed bottom-16 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
-              <div className="flex gap-1 px-2 border-r border-gray-200">
-                <button 
-                  onClick={decreaseTextSizeWithTracking} 
-                  className="p-3 text-gray-600 hover:text-blue-600"
-                  title="Diminuer la taille du texte"
-                >
-                  <Minus className="w-5 h-5" />
-                </button>
-                <div className="flex items-center px-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
-                  </span>
-                </div>
-                <button 
-                  onClick={increaseTextSizeWithTracking} 
-                  className="p-3 text-gray-600 hover:text-blue-600"
-                  title="Augmenter la taille du texte"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
+              
               
               <div className="flex gap-1 px-2 border-r border-gray-200">
                 <button 
