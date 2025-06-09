@@ -23,7 +23,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
 import { arabicTextContains } from './utils/arabic-search-utils';
 import ErrorBoundary from './components/ErrorBoundary';
-//import AnalyticsDebug from './components/AnalyticsDebug';
+
 
 // Composant Menu Déroulant Mukhtarat
 const MukhtaratDropdownMenu = ({ 
@@ -70,10 +70,7 @@ const MukhtaratDropdownMenu = ({
 
       {isOpen && (
         <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
-<<<<<<< HEAD
-=======
 
->>>>>>> 4fde9547a7279129c3de54a4da8253b7b1f441af
 
           <button
             onClick={() => handleOptionClick(onShowMukhtaratPage)}
@@ -127,9 +124,9 @@ function AppContent() {
   const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
   
   // État pour le debug analytics
-  //const [showAnalyticsDebug, setShowAnalyticsDebug] = useState(
-  //  process.env.NODE_ENV === 'development'
- // );
+  const [showAnalyticsDebug, setShowAnalyticsDebug] = useState(
+    process.env.NODE_ENV === 'development'
+  );
 
   // Vérifier si on est dans une catégorie qui supporte la recherche
   const isSearchContext: boolean = selectedCategory === 'mukhtarat' || 
@@ -442,12 +439,12 @@ function AppContent() {
       }
 
       // Debug toggle avec Ctrl+Shift+D
-      //if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-      //  e.preventDefault();
-       // setShowAnalyticsDebug(prev => !prev);
-      ////  console.log('🔧 Analytics debug toggled');
-       // return;
-     // }
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        setShowAnalyticsDebug(prev => !prev);
+        console.log('🔧 Analytics debug toggled');
+        return;
+      }
 
       // Raccourcis normaux (sans modificateurs)
       if (!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
