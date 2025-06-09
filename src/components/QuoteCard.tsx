@@ -1,4 +1,4 @@
-// QuoteCard.tsx - Version avec surlignage des termes recherchés optimisé
+// QuoteCard.tsx - Version avec correction du mode lecture
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Heart, Share2, Trash2, Edit, PlayCircle, PauseCircle, Plus, Minus, X, Copy, StickyNote, ChevronDown, ChevronUp } from 'lucide-react';
 import { Quote } from '../types';
@@ -11,7 +11,8 @@ interface QuoteCardProps {
   onDelete: (id: string) => void;
   onEdit: (quote: Quote) => void;
   onSwipe?: (direction: 'left' | 'right') => void;
-  searchTerm?: string; // Prop pour le terme de recherche
+  searchTerm?: string;
+  onReadingModeChange?: (isReading: boolean) => void; // NOUVEAU
 }
 
 // Définition des tailles de police
@@ -29,7 +30,8 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
   onDelete, 
   onEdit, 
   onSwipe, 
-  searchTerm 
+  searchTerm,
+  onReadingModeChange // NOUVEAU
 }) => {
   // Vérification initiale pour s'assurer que quote est bien défini
   if (!quote || !quote.text) {
@@ -70,6 +72,11 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
   useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;
   }, [scrollSpeed]);
+
+  // NOUVEAU: Notifier le changement d'état de lecture au parent
+  useEffect(() => {
+    onReadingModeChange?.(isReading);
+  }, [isReading, onReadingModeChange]);
 
   // Fonctions pour modifier la taille du texte
   const increaseTextSize = useCallback(() => {
@@ -393,28 +400,26 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
               </button>
               
               <button 
-                                    onClick={decreaseTextSizeWithTracking} 
-                    className="p-1 text-gray-600 hover:text-blue-600"
-                    title="Diminuer la taille du texte"
-                  >
-                    <Minus className="w-4 h-4" />
+                onClick={decreaseTextSizeWithTracking} 
+                className="p-1 text-gray-600 hover:text-blue-600"
+                title="Diminuer la taille du texte"
+              >
+                <Minus className="w-4 h-4" />
               </button>
 
               <div className="flex items-center px-2">
-                    <span className="text-sm font-medium text-gray-700">
-                      {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
-                    </span>
-                  </div>
+                <span className="text-sm font-medium text-gray-700">
+                  {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
+                </span>
+              </div>
 
               <button 
-                  
-                    onClick={increaseTextSizeWithTracking} 
-                    className="p-1 text-gray-600 hover:text-blue-600"
-                    title="Augmenter la taille du texte"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-
+                onClick={increaseTextSizeWithTracking} 
+                className="p-1 text-gray-600 hover:text-blue-600"
+                title="Augmenter la taille du texte"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             </div>
                    
             {showCopiedMessage && (
@@ -455,24 +460,33 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
           )}
         </div>
       ) : (
-        // Mode lecture immersive
+        // Mode lecture immersive - STRUCTURE CORRIGÉE POUR AFFICHAGE COMPLET
         <div className="fixed inset-0 bg-white z-40 flex flex-col">
+          {/* Container principal pour le contenu scrollable - CORRECTION CRITIQUE */}
           <div 
             ref={contentScrollRef} 
-            className="flex-1 overflow-y-auto px-6 py-8"
+            className="flex-1 overflow-y-auto p-6"
             onClick={handleContentTap}
+            style={{ 
+              minHeight: '100vh',
+              paddingBottom: '120px' // Espace pour les contrôles en bas
+            }}
           >
-            <div className="max-w-4xl mx-auto">
-              {renderQuoteText()}
-              {quote.source && (
-                <p className="text-gray-500 mt-8 italic text-center">
-                  — {quote.source}
-                </p>
-              )}
+            <div 
+              className="whitespace-pre-wrap font-arabic mx-auto max-w-4xl"
+              dir={isArabicText ? 'rtl' : 'ltr'}
+              style={textStyle}
+            >
+              {quote.text}
             </div>
+            {quote.source && (
+              <p className="text-gray-500 mt-8 italic text-center max-w-4xl mx-auto">
+                — {quote.source}
+              </p>
+            )}
           </div>
           
-          {/* Barre de progression */}
+          {/* Barre de progression - EXACTEMENT comme WirdPage */}
           <div className="fixed bottom-0 left-0 right-0 h-1 bg-gray-200">
             <div 
               className="h-full bg-blue-600 transition-all duration-100"
@@ -480,109 +494,89 @@ export const QuoteCard: React.FC<QuoteCardProps> = memo(({
             />
           </div>
 
-          {/* Contrôles */}
+          {/* Bouton X pour quitter le mode lecture - EXACTEMENT comme WirdPage */}
+          <button 
+            onClick={exitReadingWithTracking} 
+            className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100 transition-colors z-50"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          {/* Contrôles - STRUCTURE EXACTE DE WIRDPAGE */}
           {showControls && (
-            <>
-              <button 
-                onClick={exitReadingWithTracking} 
-                className="fixed top-4 right-4 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-md text-gray-700 hover:bg-gray-100 transition-colors z-50"
-              >
-                <X className="w-6 h-6" />
-              </button>
-              
-              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
-                <div className="flex gap-1 px-2 border-r border-gray-200">
-                  <button 
-                    onClick={decreaseTextSizeWithTracking} 
-                    className="p-3 text-gray-600 hover:text-blue-600"
-                    title="Diminuer la taille du texte"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <div className="flex items-center px-2">
-                    <span className="text-sm font-medium text-gray-700">
-                      {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
-                    </span>
-                  </div>
-                  <button 
-                    onClick={increaseTextSizeWithTracking} 
-                    className="p-3 text-gray-600 hover:text-blue-600"
-                    title="Augmenter la taille du texte"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+            <div className="fixed bottom-0 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
+              <div className="flex gap-1 px-2 border-r border-gray-200">
+                <button 
+                  onClick={decreaseTextSizeWithTracking} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title="Diminuer la taille du texte"
+                >
+                  <Minus className="w-5 h-5" />
+                </button>
+                <div className="flex items-center px-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    {FONT_SIZES[textSizeIndex].name.replace('text-', '')}
+                  </span>
                 </div>
-                
-                <div className="flex gap-1 px-2 border-r border-gray-200">
-                  <button 
-                    onClick={decreaseSpeedWithTracking} 
-                    className="p-3 text-gray-600 hover:text-blue-600"
-                    title="Ralentir"
-                  >
-                    <Minus className="w-5 h-5" />
-                  </button>
-                  <div className="flex items-center px-2">
-                    <span className="text-sm font-medium text-gray-700">
-                      {scrollSpeed}
-                    </span>
-                  </div>
-                  <button 
-                    onClick={increaseSpeedWithTracking} 
-                    className="p-3 text-gray-600 hover:text-blue-600"
-                    title="Accélérer"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                <div className="flex gap-1 px-2">
-                  <button 
-                    onClick={toggleScroll} 
-                    className="p-3 text-gray-600 hover:text-blue-600"
-                    title={isScrolling ? "Pause" : "Lecture"}
-                  >
-                    {isScrolling ? <PauseCircle className="w-6 h-6" /> : <PlayCircle className="w-6 h-6" />}
-                  </button>
-                  <button 
-                    onClick={handleFavoriteToggle} 
-                    className={`p-3 ${quote.isFavorite ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}
-                    title="Favori"
-                  >
-                    <Heart fill={quote.isFavorite ? 'currentColor' : 'none'} className="w-5 h-5" />
-                  </button>
-                  <button 
-                    onClick={handleShare} 
-                    className="p-3 text-gray-600 hover:text-blue-600"
-                    title="Partager"
-                  >
-                    <Copy className="w-5 h-5" />
-                  </button>
-                </div>
+                <button 
+                  onClick={increaseTextSizeWithTracking} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title="Augmenter la taille du texte"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
               </div>
               
-              {/* Bouton de notes en mode immersif (si favori) */}
-              {quote.isFavorite && (
-                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
-                  <button 
-                    onClick={() => setShowNotes(!showNotes)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-md rounded-full shadow-lg text-sm font-medium text-blue-600"
-                  >
-                    <StickyNote className="w-4 h-4" />
-                    <span>Mes notes {notesCount > 0 ? `(${notesCount})` : ''}</span>
-                    {showNotes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
-                  
-                  {showNotes && (
-                    <div className="mt-3 p-3 bg-white/95 backdrop-blur-md rounded-xl shadow-lg max-w-md w-[90vw] max-h-[30vh] overflow-y-auto">
-                      <QuoteNoteEditor 
-                        quoteId={quote.id} 
-                        onNotesUpdated={handleNotesUpdated}
-                      />
-                    </div>
-                  )}
+              <div className="flex gap-1 px-2 border-r border-gray-200">
+                <button 
+                  onClick={decreaseSpeedWithTracking} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title="Ralentir"
+                >
+                  <Minus className="w-5 h-5" />
+                </button>
+                <div className="flex items-center px-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    {scrollSpeed}
+                  </span>
                 </div>
-              )}
-            </>
+                <button 
+                  onClick={increaseSpeedWithTracking} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title="Accélérer"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="flex gap-1 px-2 border-r border-gray-200">
+                <button 
+                  onClick={toggleScroll} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title={isScrolling ? "Pause" : "Lecture"}
+                >
+                  {isScrolling ? <PauseCircle className="w-6 h-6" /> : <PlayCircle className="w-6 h-6" />}
+                </button>
+              </div>
+
+              {/* Actions spécifiques aux citations - ajoutées à WirdPage structure */}
+              <div className="flex gap-1 px-2">
+                <button 
+                  onClick={handleFavoriteToggle} 
+                  className={`p-1 ${quote.isFavorite ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}
+                  title="Favori"
+                >
+                  <Heart fill={quote.isFavorite ? 'currentColor' : 'none'} className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={handleShare} 
+                  className="p-1 text-gray-600 hover:text-blue-600"
+                  title="Partager"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

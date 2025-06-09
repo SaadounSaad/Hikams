@@ -487,7 +487,7 @@ const AlbaqiatPage: React.FC<AlbaqiatPageProps> = ({ onBack }) => {
             </button>
           {/* Contrôles */}
           {showControls && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
+            <div className="fixed bottom-16 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
               <div className="flex gap-1 px-2 border-r border-gray-200">
                 <button 
                   onClick={decreaseTextSizeWithTracking} 

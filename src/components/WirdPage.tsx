@@ -169,6 +169,7 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
   }, [isScrolling]);
 
   // Fonction pour gérer le comportement tactile amélioré
+  // CORRECTION POUR WIRDPAGE - handleContentTap
   const handleContentTap = useCallback(() => {
     if (!isReading) return;
     
@@ -183,18 +184,15 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
     
     // Double tap (moins de 300ms entre deux taps)
     if (timeSinceLastTap < 300) {
-      // Second tap - basculer l'état de lecture et cacher les contrôles
-      if (showControls) {
-        setIsScrolling(true);
-        setShowControls(false);
-      }
+      // CORRECTION: Second tap - toujours reprendre la lecture et cacher les contrôles
+      setIsScrolling(true);
+      setShowControls(false);
     } else {
       // Premier tap - mettre en pause et montrer les contrôles
       setIsScrolling(false);
       setShowControls(true);
       
-      // Ne pas configurer de timeout pour masquer les contrôles - ils resteront
-      // visibles jusqu'au second tap
+      // Ne pas configurer de timeout pour masquer les contrôles automatiquement
       if (controlsTimeoutRef.current) {
         window.clearTimeout(controlsTimeoutRef.current);
         controlsTimeoutRef.current = null;
@@ -202,7 +200,7 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
     }
     
     lastTapTimeRef.current = now;
-  }, [isReading, showControls]);
+  }, [isReading]);
 
   // Gestionnaire d'événements pour les boutons de contrôle
   const handleControlButtonClick = useCallback(() => {
@@ -426,7 +424,7 @@ const WirdPage: React.FC<WirdPageProps> = ({ onBack }) => {
             </button>
           {/* Contrôles */}
           {showControls && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
+            <div className="fixed bottom-16 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center z-50">
               <div className="flex gap-1 px-2 border-r border-gray-200">
                 <button 
                   onClick={decreaseTextSizeWithTracking} 

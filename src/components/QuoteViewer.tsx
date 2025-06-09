@@ -1,4 +1,4 @@
-// src/components/QuoteViewer.tsx - Version avec hooks fixes FINAL
+// src/components/QuoteViewer.tsx - Version avec masquage des contrôles en mode lecture
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
@@ -107,10 +107,18 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { trackEvent } = useAnalytics();
 
+  // NOUVEAU: État pour détecter si une QuoteCard est en mode lecture
+  const [isQuoteInReadingMode, setIsQuoteInReadingMode] = useState(false);
+
   // ✅ AMÉLIORATION: Tracking du temps de lecture avec timer
   const readingTimerRef = useRef<number | null>(null);
   const quoteStartTimeRef = useRef<number>(Date.now());
   const lastTrackedQuoteRef = useRef<string | null>(null);
+
+  // NOUVEAU: Fonction pour recevoir l'état de lecture de QuoteCard
+  const handleReadingModeChange = useCallback((isReading: boolean) => {
+    setIsQuoteInReadingMode(isReading);
+  }, []);
 
   // ✅ AMÉLIORATION: Fonction de tracking de lecture avec temps réel
   const handleQuoteView = useCallback((quote: Quote, readingTime?: number) => {
@@ -250,11 +258,11 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     }, 150);
   }, [quotes.length, currentIndex, onIndexChange, isTransitioning, selectedCategory, trackEvent]);
 
-  // Hook pour la détection des swipes
+  // Hook pour la détection des swipes - DÉSACTIVÉ en mode lecture
   const swipeContainerRef = useSwipeNavigation(
     handleSwipeLeft,
     handleSwipeRight,
-    quotes.length > 1 && !isTransitioning
+    quotes.length > 1 && !isTransitioning && !isQuoteInReadingMode // MODIFIÉ
   );
 
   // ✅ AMÉLIORATION: Navigation avec tracking
@@ -400,10 +408,10 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     fetchBookmark();
   }, [selectedCategory]);
 
-  // ✅ AMÉLIORATION: Navigation clavier avec tracking
+  // ✅ AMÉLIORATION: Navigation clavier avec tracking - DÉSACTIVÉE en mode lecture
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isTransitioning) return;
+      if (isTransitioning || isQuoteInReadingMode) return; // MODIFIÉ
 
       const trackKeyboardNavigation = (direction: string) => {
         trackEvent('quote_navigation', {
@@ -444,7 +452,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isTransitioning, handleSwipeLeft, handleSwipeRight, handleNavigateToFirst, handleNavigateToLast, currentIndex, selectedCategory, trackEvent]);
+  }, [isTransitioning, isQuoteInReadingMode, handleSwipeLeft, handleSwipeRight, handleNavigateToFirst, handleNavigateToLast, currentIndex, selectedCategory, trackEvent]); // MODIFIÉ
 
   // ✅ AMÉLIORATION: Tracking des recherches
   useEffect(() => {
@@ -509,105 +517,110 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
 
   return (
     <div className="pb-6 mb-6">
-      {/* Affichage du statut de recherche si applicable */}
-      {searchTerm && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-center gap-2 text-yellow-800">
-            <div className="text-sm">
-              <span className="font-medium">
-                {quotes.length} résultat{quotes.length > 1 ? 's' : ''} trouvé{quotes.length > 1 ? 's' : ''} pour: 
-              </span>
-              <span className="font-bold ml-1">"{searchTerm}"</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Barre de navigation avec menu mukhtarat intégré */}
-      <div className="flex items-center justify-between mb-4">
-        {/* Menu mukhtarat à l'extrême gauche */}
-        <div className="flex items-center gap-1">
-          {renderExtraControls && (
-            <div className="mr-1">
-              {renderExtraControls()}
+      {/* Masquer la barre de navigation si en mode lecture - LOGIQUE PRINCIPALE */}
+      {!isQuoteInReadingMode && (
+        <>
+          {/* Affichage du statut de recherche si applicable */}
+          {searchTerm && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-800">
+                <div className="text-sm">
+                  <span className="font-medium">
+                    {quotes.length} résultat{quotes.length > 1 ? 's' : ''} trouvé{quotes.length > 1 ? 's' : ''} pour: 
+                  </span>
+                  <span className="font-bold ml-1">"{searchTerm}"</span>
+                </div>
+              </div>
             </div>
           )}
-          
-          {/* Boutons de navigation gauche */}
-          <button 
-            onClick={handleNavigateToFirst} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={quotes.length === 0 || currentIndex === 0 || isTransitioning}
-            title="الذهاب إلى البداية"
-          >
-            <ChevronsLeft className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => handleSwipe('right')} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={quotes.length === 0 || currentIndex === 0 || isTransitioning}
-            title="السابق"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* Compteur central avec indicateur de progression */}
-        <div className="flex flex-col items-center">
-          <span className="text-sm font-medium text-gray-500 bg-white/50 px-3 py-1.5 rounded-full">
-            {currentIndex + 1} / {quotes.length}
-          </span>
-          {quotes.length > 1 && (
-            <div className="mt-1 flex gap-1">
-              {Array.from({ length: Math.min(quotes.length, 5) }, (_, i) => (
-                <div
-                  key={i}
-                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    i === currentIndex ? 'bg-blue-500' : 'bg-gray-300'
-                  }`}
-                />
-              ))}
-              {quotes.length > 5 && (
-                <span className="text-xs text-gray-400 ml-1">...</span>
+          {/* Barre de navigation avec menu mukhtarat intégré */}
+          <div className="flex items-center justify-between mb-4">
+            {/* Menu mukhtarat à l'extrême gauche */}
+            <div className="flex items-center gap-1">
+              {renderExtraControls && (
+                <div className="mr-1">
+                  {renderExtraControls()}
+                </div>
+              )}
+              
+              {/* Boutons de navigation gauche */}
+              <button 
+                onClick={handleNavigateToFirst} 
+                className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={quotes.length === 0 || currentIndex === 0 || isTransitioning}
+                title="الذهاب إلى البداية"
+              >
+                <ChevronsLeft className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => handleSwipe('right')} 
+                className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={quotes.length === 0 || currentIndex === 0 || isTransitioning}
+                title="السابق"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Compteur central avec indicateur de progression */}
+            <div className="flex flex-col items-center">
+              <span className="text-sm font-medium text-gray-500 bg-white/50 px-3 py-1.5 rounded-full">
+                {currentIndex + 1} / {quotes.length}
+              </span>
+              {quotes.length > 1 && (
+                <div className="mt-1 flex gap-1">
+                  {Array.from({ length: Math.min(quotes.length, 5) }, (_, i) => (
+                    <div
+                      key={i}
+                      className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                        i === currentIndex ? 'bg-blue-500' : 'bg-gray-300'
+                      }`}
+                    />
+                  ))}
+                  {quotes.length > 5 && (
+                    <span className="text-xs text-gray-400 ml-1">...</span>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Boutons de navigation droite */}
-        <div className="flex items-center gap-1">
-          <button 
-            onClick={() => handleSwipe('left')} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={quotes.length === 0 || currentIndex >= quotes.length - 1 || isTransitioning}
-            title="التالي"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={handleNavigateToLast} 
-            className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={quotes.length === 0 || currentIndex >= quotes.length - 1 || isTransitioning}
-            title="الذهاب إلى النهاية"
-          >
-            <ChevronsRight className="w-5 h-5" />
-          </button>
-          
-          {/* Bouton bookmark */}
-          <button
-            onClick={handleManualBookmark}
-            className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              bookmarkIndex === currentIndex 
-                ? 'bg-blue-100 text-blue-600' 
-                : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
-            }`}
-            title="إضافة إشارة مرجعية"
-            disabled={quotes.length === 0 || isTransitioning}
-          >
-            <Bookmark className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+            {/* Boutons de navigation droite */}
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={() => handleSwipe('left')} 
+                className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={quotes.length === 0 || currentIndex >= quotes.length - 1 || isTransitioning}
+                title="التالي"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={handleNavigateToLast} 
+                className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={quotes.length === 0 || currentIndex >= quotes.length - 1 || isTransitioning}
+                title="الذهاب إلى النهاية"
+              >
+                <ChevronsRight className="w-5 h-5" />
+              </button>
+              
+              {/* Bouton bookmark */}
+              <button
+                onClick={handleManualBookmark}
+                className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  bookmarkIndex === currentIndex 
+                    ? 'bg-blue-100 text-blue-600' 
+                    : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+                }`}
+                title="إضافة إشارة مرجعية"
+                disabled={quotes.length === 0 || isTransitioning}
+              >
+                <Bookmark className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Container avec détection de swipe et animation */}
       <div 
@@ -630,6 +643,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
             onDelete={handleDeleteWithTracking}
             onSwipe={handleSwipe}
             searchTerm={searchTerm}
+            onReadingModeChange={handleReadingModeChange} // NOUVEAU PROP
           />
         ) : (
           <div className="p-6 rounded-xl bg-white shadow">
