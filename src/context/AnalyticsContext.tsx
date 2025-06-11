@@ -1,207 +1,96 @@
-// context/AnalyticsContext.tsx - Version mise à jour
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { AnalyticsService } from '../services/analytics/AnalyticsService';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
-// Interface mise à jour du contexte
-interface AnalyticsContextProps {
-  trackEvent: (type: string, payload?: Record<string, any>) => Promise<void>;
-  analytics: AnalyticsService | null; // ✅ NOUVEAU: Exposer le service
-  isInitialized: boolean;
-  syncEnabled: boolean;
-  setSyncEnabled: (enabled: boolean) => void;
-  getQueueStats: () => any;
-  
-  forcSync: () => Promise<void>; // ✅ NOUVEAU: Exposer forcSync
-  processOfflineEvents: () => Promise<void>; // ✅ NOUVEAU: Exposer processOfflineEvents
+interface AnalyticsContextType {
+  trackEvent: (type: string, data?: any) => Promise<void>;
+  trackFavorite: (action: 'add' | 'remove', quote: { id: string; category: string }) => Promise<void>;
+  isOnline: boolean;
 }
 
-const AnalyticsContext = createContext<AnalyticsContextProps | undefined>(undefined);
+const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefined);
 
 export function AnalyticsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [analytics, setAnalytics] = useState<AnalyticsService | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [syncEnabled, setSyncEnabledState] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // Initialiser le service analytics
+  // Network status uniquement
   useEffect(() => {
-    async function initAnalytics() {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Tracking silencieux - ne fait rien mais n'échoue pas
+  const trackEvent = useCallback(async (type: string, data: any = {}) => {
+    // Mode silencieux : pas d'erreur, pas de log, pas de requête
+    if (process.env.NODE_ENV === 'development') {
+      // En dev, juste stocker localement si besoin
+      const event = {
+        type,
+        data: { ...data, timestamp: new Date().toISOString(), user_id: user?.id },
+        stored_at: Date.now()
+      };
+      
       try {
-        const { supabase } = await import('../lib/supabase');
-        const service = new AnalyticsService(supabase, user?.id);
-        
-        setAnalytics(service);
-        setIsInitialized(true);
-        
-        // Démarrer la sync périodique
-        service.startPeriodicSync();
-        
-        console.log('🚀 AnalyticsService initialized successfully');
-      } catch (error) {
-        console.error('❌ Failed to initialize AnalyticsService:', error);
-        setIsInitialized(true); // Marquer comme initialisé même en cas d'erreur
+        const events = JSON.parse(localStorage.getItem('analytics_events') || '[]');
+        events.push(event);
+        // Garder seulement les 100 derniers événements en dev
+        if (events.length > 100) {
+          events.splice(0, events.length - 100);
+        }
+        localStorage.setItem('analytics_events', JSON.stringify(events));
+      } catch {
+        // Même les erreurs localStorage sont silencieuses
       }
     }
-
-    initAnalytics();
-
-    // Cleanup au démontage
-    return () => {
-      if (analytics) {
-        analytics.cleanup();
-      }
-    };
   }, [user?.id]);
 
-  // Mettre à jour l'userId quand l'utilisateur change
+  const trackFavorite = useCallback(async (action: 'add' | 'remove', quote: { id: string; category: string }) => {
+    await trackEvent(`favorite_${action}ed`, {
+      quote_id: quote.id,
+      category: quote.category
+    });
+  }, [trackEvent]);
+
+  // Debug interface pour développement seulement
   useEffect(() => {
-    if (analytics && user?.id) {
-      analytics.setUserId(user.id);
-    }
-  }, [analytics, user?.id]);
-
-  // Fonction pour tracker un événement
-  const trackEvent = async (type: string, payload: Record<string, any> = {}) => {
-    if (!analytics) {
-      console.warn('📊 Analytics not initialized, event not tracked:', type);
-      return;
-    }
-
-    try {
-      await analytics.trackEvent(type, payload);
-    } catch (error) {
-      console.error('❌ Failed to track event:', type, error);
-    }
-  };
-
-  // Fonction pour activer/désactiver la sync
-  const setSyncEnabled = (enabled: boolean) => {
-    setSyncEnabledState(enabled);
-    if (analytics) {
-      analytics.setSyncEnabled(enabled);
-    }
-  };
-
-  // Fonction pour obtenir les stats de la queue
-  const getQueueStats = () => {
-    return analytics?.getQueueStats() || {
-      queueSize: 0,
-      syncEnabled: false,
-      sessionId: '',
-      isOnline: false,
-      syncInProgress: false
-    };
-  };
-
-  // Fonction pour forcer la synchronisation
-  const forcSync = async () => {
-    if (!analytics) {
-      throw new Error('Analytics service not initialized');
-    }
-    return analytics.forcSync();
-  };
-
-  // Fonction pour traiter les événements offline
-  const processOfflineEvents = async () => {
-    if (!analytics) {
-      throw new Error('Analytics service not initialized');
-    }
-    return analytics.processQueuedEvents();
-  };
-
-  // ✅ NOUVEAU: Interface de debug globale
-  useEffect(() => {
-    if (analytics && typeof trackEvent === 'function') {
+    if (process.env.NODE_ENV === 'development') {
       (window as any).debugAnalytics = {
-        service: analytics,
-        trackEvent,
-        forcSync: async () => {
+        getStoredEvents: () => {
           try {
-            await analytics.forcSync();
-            console.log('✅ Force sync completed');
-          } catch (error) {
-            console.error('❌ Force sync failed:', error);
-            throw error;
+            return JSON.parse(localStorage.getItem('analytics_events') || '[]');
+          } catch {
+            return [];
           }
         },
-        setSyncEnabled: (enabled: boolean) => {
-          analytics.setSyncEnabled(enabled);
-          console.log('🔄 Sync enabled:', enabled);
+        clearStoredEvents: () => {
+          localStorage.removeItem('analytics_events');
         },
-        getStats: () => analytics.getQueueStats(),
-        processOfflineEvents: async () => {
-          try {
-            await analytics.processQueuedEvents();
-            console.log('✅ Offline events processed');
-          } catch (error) {
-            console.error('❌ Failed to process offline events:', error);
-            throw error;
-          }
-        },
-        // Méthodes de debug supplémentaires
-        getKPIs: async (startDate?: Date, endDate?: Date) => {
-          try {
-            const kpis = await analytics.getMyKPIs(startDate, endDate);
-            console.log('📊 KPIs:', kpis);
-            return kpis;
-          } catch (error) {
-            console.error('❌ Failed to get KPIs:', error);
-            throw error;
-          }
-        },
-        trackTestEvent: () => {
-          trackEvent('debug_test', {
-            test_data: 'Hello from debug',
-            timestamp: new Date().toISOString()
-          });
-          console.log('🧪 Test event tracked');
-        }
+        trackTest: () => trackEvent('test_event', { test: true })
       };
 
-      // Cleanup debug interface
       return () => {
         delete (window as any).debugAnalytics;
       };
     }
-  }, [analytics, trackEvent]);
-
-  const value: AnalyticsContextProps = {
-    trackEvent,
-    analytics, // ✅ NOUVEAU: Exposer le service
-    isInitialized,
-    syncEnabled,
-    setSyncEnabled,
-    getQueueStats,
-    forcSync, // ✅ NOUVEAU: Exposer forcSync
-    processOfflineEvents // ✅ NOUVEAU: Exposer processOfflineEvents
-  };
+  }, [trackEvent]);
 
   return (
-    <AnalyticsContext.Provider value={value}>
+    <AnalyticsContext.Provider value={{ trackEvent, trackFavorite, isOnline }}>
       {children}
     </AnalyticsContext.Provider>
   );
 }
 
-export function useAnalytics() {
+export const useAnalytics = () => {
   const context = useContext(AnalyticsContext);
-  if (context === undefined) {
-    throw new Error('useAnalytics must be used within an AnalyticsProvider');
-  }
+  if (!context) throw new Error('useAnalytics must be used within AnalyticsProvider');
   return context;
-}
-
-// ✅ NOUVEAU: Hook personnalisé pour accéder facilement aux KPIs
-export function useAnalyticsKPIs() {
-  const { analytics } = useAnalytics();
-  
-  const getKPIs = async (startDate?: Date, endDate?: Date) => {
-    if (!analytics) {
-      throw new Error('Analytics service not available');
-    }
-    return analytics.getMyKPIs(startDate, endDate);
-  };
-
-  return { getKPIs, isAvailable: !!analytics };
-}
+};

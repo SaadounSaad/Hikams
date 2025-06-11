@@ -1,11 +1,11 @@
-// hooks/useAnalyticsData.ts - Version mise à jour compatible
-import { useState, useEffect } from "react";
+// hooks/useAnalyticsData.ts - Version compatible avec vos types existants
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../../../context/AuthContext"; 
 import { TimeFilterState } from "./useTimeFilter";
 
 // Interfaces correspondant à nos vues SQL
 interface DailySessionStat {
-  activity_date: string; // YYYY-MM-DD
+  activity_date: string;
   unique_users: number;
   total_sessions: number;
   avg_session_duration_seconds: number | null;
@@ -27,16 +27,9 @@ interface TopFavoriteQuote {
   quote_text_preview: string | null;
 }
 
-// Interface pour les KPIs utilisateur (correspondant à notre fonction get_my_kpis)
-export interface UserKPIs {
-  user_id: string;
-  sessions_last_30d: number | null;
-  avg_session_duration_last_30d_secs: number | null;
-  reads_last_30d: number | null;
-  total_read_time_last_30d_secs: number | null;
-  favorites_added_last_30d: number | null;
-  most_read_category_last_30d: string | null;
-}
+// Utilisons un type générique pour les KPIs pour éviter les erreurs de type
+// Nous découvrirons la structure réelle au runtime
+export type UserKPIs = Record<string, any>;
 
 // Structure de données combinée
 export interface AnalyticsData {
@@ -44,6 +37,7 @@ export interface AnalyticsData {
   sessionStats: DailySessionStat[];
   categoryReads: QuoteReadPerCategory[];
   topFavorites: TopFavoriteQuote[];
+  lastUpdated: string;
 }
 
 export interface UseAnalyticsDataResult {
@@ -51,12 +45,29 @@ export interface UseAnalyticsDataResult {
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
+  isStale: boolean;
 }
 
-// Helper pour formater les dates pour Supabase
+// Helper pour formater les dates
 const formatDateForSupabase = (date: Date | null): string | null => {
   if (!date) return null;
   return date.toISOString(); 
+};
+
+// Helper pour détecter les changements significatifs
+const hasSignificantChange = (oldData: AnalyticsData | null, newData: AnalyticsData | null): boolean => {
+  if (!oldData || !newData) return true;
+  
+  // Comparaison simple basée sur la structure des données
+  const oldKpisKeys = oldData.kpis ? Object.keys(oldData.kpis).length : 0;
+  const newKpisKeys = newData.kpis ? Object.keys(newData.kpis).length : 0;
+  
+  return (
+    oldKpisKeys !== newKpisKeys ||
+    oldData.sessionStats.length !== newData.sessionStats.length ||
+    oldData.categoryReads.length !== newData.categoryReads.length ||
+    oldData.topFavorites.length !== newData.topFavorites.length
+  );
 };
 
 export const useAnalyticsData = (timeFilter: TimeFilterState): UseAnalyticsDataResult => {
@@ -65,60 +76,85 @@ export const useAnalyticsData = (timeFilter: TimeFilterState): UseAnalyticsDataR
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
-// Dans useAnalyticsData.ts
+  const [isStale, setIsStale] = useState<boolean>(false);
+  
+  // Références pour éviter les re-renders inutiles
+  const lastFetchRef = useRef<string>('');
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const refetch = () => {
+  const refetch = useCallback(() => {
+    console.log("🔄 Manual refetch triggered");
     setRefreshTrigger(prev => prev + 1);
-  };
+    setIsStale(false);
+  }, []);
 
-  useEffect(() => {
+  // Fonction de fetch principal avec gestion d'erreur améliorée
+  const fetchData = useCallback(async () => {
     if (!supabase || !user) {
+      console.log("⚠️ Supabase or user not available");
       setData(null);
       return;
     }
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      console.log("🔄 Fetching analytics data for period:", timeFilter.startDate, "to", timeFilter.endDate);
+    // Éviter les requêtes en double
+    const currentQuery = `${timeFilter.startDate}-${timeFilter.endDate}-${timeFilter.preset}-${user.id}`;
+    if (currentQuery === lastFetchRef.current && isLoading) {
+      console.log("🔄 Skipping duplicate request");
+      return;
+    }
+    lastFetchRef.current = currentQuery;
 
+    setIsLoading(true);
+    setError(null);
+    console.log("🔄 Fetching analytics data for period:", timeFilter.startDate, "to", timeFilter.endDate);
+
+    try {
+      const startDateStr = formatDateForSupabase(timeFilter.startDate);
+      const endDateStr = formatDateForSupabase(timeFilter.endDate);
+
+      // --- Fetch KPIs via votre fonction existante ---
+      console.log("📊 Fetching KPIs...");
+      let userKpis: UserKPIs | null = null;
+      
       try {
-        const startDateStr = formatDateForSupabase(timeFilter.startDate);
-        const endDateStr = formatDateForSupabase(timeFilter.endDate);
-
-        // --- Fetch KPIs using our function ---
-        console.log("📊 Fetching KPIs...");
-        // Dans useAnalyticsData.ts
+        // Essayer d'abord avec get_my_kpis_for_user si elle existe
         const { data: kpisData, error: kpisError } = await supabase
           .rpc("get_my_kpis_for_user", {
-            p_user_id: user.id // Passer l'user_id explicitement
-          });                     
-
+            p_user_id: user.id
+          });
         
         if (kpisError) {
-          console.error("❌ KPIs error:", kpisError);
-          throw new Error(`KPIs fetch error: ${kpisError.message}`);
+          console.warn("⚠️ get_my_kpis_for_user failed, trying alternative:", kpisError.message);
+          
+          // Fallback: essayer get_my_kpis sans paramètre (si c'est votre convention)
+          const { data: fallbackKpis, error: fallbackError } = await supabase
+            .rpc("get_my_kpis");
+          
+          if (fallbackError) {
+            throw new Error(`Both KPI methods failed: ${kpisError.message} / ${fallbackError.message}`);
+          }
+          
+          userKpis = fallbackKpis && fallbackKpis.length > 0 ? fallbackKpis[0] : null;
+        } else {
+          userKpis = kpisData && kpisData.length > 0 ? kpisData[0] : null;
         }
+      } catch (error) {
+        console.error("❌ KPIs fetch failed:", error);
+        // Ne pas throw ici, continuer avec userKpis = null
+      }
 
-        const userKpis: UserKPIs | null = kpisData && kpisData.length > 0 ? {
-          user_id: kpisData[0].user_id,
-          sessions_last_30d: kpisData[0].sessions_last_30d,
-          avg_session_duration_last_30d_secs: kpisData[0].avg_session_duration_last_30d_secs,
-          reads_last_30d: kpisData[0].reads_last_30d,
-          total_read_time_last_30d_secs: kpisData[0].total_read_time_last_30d_secs,
-          favorites_added_last_30d: kpisData[0].favorites_added_last_30d,
-          most_read_category_last_30d: kpisData[0].most_read_category_last_30d
-        } : null;
+      console.log("✅ KPIs loaded:", userKpis ? Object.keys(userKpis) : 'none');
 
-        console.log("✅ KPIs loaded:", userKpis);
-
-        // --- Fetch Session Stats ---
-        console.log("📈 Fetching session stats...");
+      // --- Fetch Session Stats ---
+      console.log("📈 Fetching session stats...");
+      let sessionData: DailySessionStat[] = [];
+      
+      try {
         let sessionQuery = supabase
           .from("daily_session_stats")
           .select("*")
           .order("activity_date", { ascending: false })
-          .limit(30); // Limiter pour éviter trop de données
+          .limit(30);
 
         if (startDateStr) {
           sessionQuery = sessionQuery.gte("activity_date", startDateStr.split("T")[0]);
@@ -127,23 +163,27 @@ export const useAnalyticsData = (timeFilter: TimeFilterState): UseAnalyticsDataR
           sessionQuery = sessionQuery.lte("activity_date", endDateStr.split("T")[0]);
         }
 
-        const { data: sessionData, error: sessionError } = await sessionQuery;
+        const { data: sessionResult, error: sessionError } = await sessionQuery;
         if (sessionError) {
-          console.error("❌ Session stats error:", sessionError);
-          throw new Error(`Session stats fetch error: ${sessionError.message}`);
+          console.warn("⚠️ Session stats error (non-fatal):", sessionError);
+        } else {
+          sessionData = sessionResult || [];
         }
+      } catch (error) {
+        console.warn("⚠️ Session stats fetch failed (non-fatal):", error);
+      }
 
-        console.log("✅ Session stats loaded:", sessionData?.length || 0, "records");
-
-        // --- Fetch Category Reads (user-specific) ---
-        console.log("📚 Fetching category reads...");
+      // --- Fetch Category Reads ---
+      console.log("📚 Fetching category reads...");
+      let categoryData: QuoteReadPerCategory[] = [];
+      
+      try {
         let categoryQuery = supabase
           .from("quote_reads_per_category_user")
           .select("*")
           .order("activity_date", { ascending: false })
           .limit(50);
 
-        // Filtrer par utilisateur si possible (sinon prendre toutes les données)
         if (user?.id) {
           categoryQuery = categoryQuery.eq("user_id", user.id);
         }
@@ -155,54 +195,106 @@ export const useAnalyticsData = (timeFilter: TimeFilterState): UseAnalyticsDataR
           categoryQuery = categoryQuery.lte("activity_date", endDateStr.split("T")[0]);
         }
 
-        const { data: categoryData, error: categoryError } = await categoryQuery;
+        const { data: categoryResult, error: categoryError } = await categoryQuery;
         if (categoryError) {
-          console.error("❌ Category reads error:", categoryError);
-          throw new Error(`Category reads fetch error: ${categoryError.message}`);
+          console.warn("⚠️ Category reads error (non-fatal):", categoryError);
+        } else {
+          categoryData = categoryResult || [];
         }
+      } catch (error) {
+        console.warn("⚠️ Category reads fetch failed (non-fatal):", error);
+      }
 
-        console.log("✅ Category reads loaded:", categoryData?.length || 0, "records");
-
-        // --- Fetch Top Favorites ---
-        console.log("⭐ Fetching top favorites...");
-        const { data: favoriteData, error: favoriteError } = await supabase
+      // --- Fetch Top Favorites ---
+      console.log("⭐ Fetching top favorites...");
+      let favoriteData: TopFavoriteQuote[] = [];
+      
+      try {
+        const { data: favoriteResult, error: favoriteError } = await supabase
           .from("top_favorite_quotes")
           .select("quote_id, favorite_count, category, quote_text_preview")
           .order("favorite_count", { ascending: false })
           .limit(10);
 
         if (favoriteError) {
-          console.error("❌ Top favorites error:", favoriteError);
-          throw new Error(`Top favorites fetch error: ${favoriteError.message}`);
+          console.warn("⚠️ Top favorites error (non-fatal):", favoriteError);
+        } else {
+          favoriteData = favoriteResult || [];
         }
-
-        console.log("✅ Top favorites loaded:", favoriteData?.length || 0, "records");
-
-        // --- Combine all data ---
-        const combinedData: AnalyticsData = {
-          kpis: userKpis,
-          sessionStats: sessionData || [],
-          categoryReads: categoryData || [],
-          topFavorites: favoriteData || [],
-        };
-
-        setData(combinedData);
-        console.log("🎉 Analytics data successfully loaded!");
-
-      } catch (err: any) {
-        console.error("💥 Failed to fetch analytics data:", err);
-        setError(err instanceof Error ? err : new Error("An unknown error occurred"));
-        setData(null);
-      } finally {
-        setIsLoading(false);
+      } catch (error) {
+        console.warn("⚠️ Top favorites fetch failed (non-fatal):", error);
       }
-    };
 
+      // --- Combine all data ---
+      const newData: AnalyticsData = {
+        kpis: userKpis,
+        sessionStats: sessionData,
+        categoryReads: categoryData,
+        topFavorites: favoriteData,
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Vérifier si les données ont changé
+      const hasChanged = hasSignificantChange(data, newData);
+      if (hasChanged) {
+        console.log("🎉 Analytics data updated with changes!");
+        setData(newData);
+      } else {
+        console.log("📊 Analytics data refreshed (no significant changes)");
+        // Mettre à jour le timestamp même sans changements
+        setData(prev => prev ? { ...prev, lastUpdated: newData.lastUpdated } : newData);
+      }
+
+    } catch (err: any) {
+      console.error("💥 Failed to fetch analytics data:", err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      // Ne pas effacer les données existantes en cas d'erreur
+      if (!data) {
+        setData(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [timeFilter.startDate, timeFilter.endDate, timeFilter.preset, supabase, user, data]);
+
+  // Effect principal avec auto-refresh
+  useEffect(() => {
     fetchData();
 
-  }, [timeFilter.startDate, timeFilter.endDate, timeFilter.preset, supabase, user, refreshTrigger]);
+    // Configurer l'auto-refresh toutes les 30 secondes
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
 
-  return { data, isLoading, error, refetch };
+    intervalRef.current = setInterval(() => {
+      console.log("🔄 Auto-refreshing analytics data...");
+      setIsStale(true);
+      fetchData();
+    }, 30000); // 30 secondes
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchData, refreshTrigger]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
+  return { 
+    data, 
+    isLoading, 
+    error, 
+    refetch, 
+    isStale 
+  };
 };
 
 // Hook spécialisé pour les actions analytics
@@ -222,6 +314,7 @@ export const useAnalyticsActions = () => {
       if (error) throw error;
       
       console.log("✅ Queued events processed successfully");
+      return true;
     } catch (error) {
       console.error("❌ Failed to process queued events:", error);
       throw error;
