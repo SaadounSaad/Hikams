@@ -1,10 +1,12 @@
-// src/components/QuoteViewer.tsx - Version avec masquage des contrôles en mode lecture
+// src/components/QuoteViewer.tsx - VERSION COMPLÈTE AVEC ANALYTICS BATCH
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
 import { QuoteCard } from './QuoteCard';
 import { updateBookmark, getSavedPageIndex } from '../utils/bookmarkService';
-import { useAnalytics } from '../context/AnalyticsContext';
+import { useAuth } from '../context/AuthContext';
+// ✅ NOUVEAU: Import du service batch analytics
+import { useBatchAnalytics } from '../services/batchAnalyticsService';
 
 interface QuoteViewerProps {
   quotes: Quote[];
@@ -18,7 +20,7 @@ interface QuoteViewerProps {
   renderExtraControls?: () => React.ReactNode;
 }
 
-// Hook personnalisé pour la gestion des swipes
+// Hook personnalisé pour la gestion des swipes (inchangé)
 const useSwipeNavigation = (
   onSwipeLeft: () => void,
   onSwipeRight: () => void,
@@ -46,34 +48,30 @@ const useSwipeNavigation = (
     const deltaY = touch.clientY - touchStartRef.current.y;
     const deltaTime = Date.now() - touchStartRef.current.time;
 
-    // Seuils de détection
     const minSwipeDistance = 50;
     const maxSwipeTime = 500;
     const maxVerticalDeviation = 100;
 
-    // Vérifier si c'est un swipe horizontal valide
     const isHorizontalSwipe = Math.abs(deltaX) > minSwipeDistance;
     const isWithinTimeLimit = deltaTime < maxSwipeTime;
     const isNotVerticalScroll = Math.abs(deltaY) < maxVerticalDeviation;
     const isHorizontalDominant = Math.abs(deltaX) > Math.abs(deltaY) * 1.5;
 
     if (isHorizontalSwipe && isWithinTimeLimit && isNotVerticalScroll && isHorizontalDominant) {
-      // Feedback haptique sur iOS
       if ('vibrate' in navigator) {
         navigator.vibrate(50);
       }
 
       if (deltaX > 0) {
-        onSwipeRight(); // Swipe vers la droite = quote précédente
+        onSwipeRight();
       } else {
-        onSwipeLeft(); // Swipe vers la gauche = quote suivante
+        onSwipeLeft();
       }
     }
 
     touchStartRef.current = null;
   }, [isEnabled, onSwipeLeft, onSwipeRight]);
 
-  // Gestion des événements
   useEffect(() => {
     const container = swipeContainerRef.current;
     if (!container || !isEnabled) return;
@@ -101,139 +99,109 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   searchTerm,
   renderExtraControls,
 }) => {
-  // ✅ CRITIQUE: Tous les hooks DOIVENT être appelés avant tout return conditionnel
+  // ✅ HOOKS - TOUS APPELÉS EN PREMIER
+  const { user } = useAuth();
   const [bookmarkIndex, setBookmarkIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const { trackEvent } = useAnalytics();
-
-  // NOUVEAU: État pour détecter si une QuoteCard est en mode lecture
   const [isQuoteInReadingMode, setIsQuoteInReadingMode] = useState(false);
 
-  // ✅ AMÉLIORATION: Tracking du temps de lecture avec timer
+  // ✅ NOUVEAU: Service analytics batch complet
+  const {
+    trackQuoteRead,
+    trackFavorite,
+    trackBookmark,
+    trackSearch,
+    trackNavigation,
+    getSessionStats,
+    getDebugInfo
+  } = useBatchAnalytics({
+    userId: user?.id || '',
+    category: selectedCategory
+  });
+
+  // ✅ Refs pour le tracking du temps de lecture
   const readingTimerRef = useRef<number | null>(null);
   const quoteStartTimeRef = useRef<number>(Date.now());
   const lastTrackedQuoteRef = useRef<string | null>(null);
 
-  // NOUVEAU: Fonction pour recevoir l'état de lecture de QuoteCard
+  // ✅ Fonction pour recevoir l'état de lecture de QuoteCard
   const handleReadingModeChange = useCallback((isReading: boolean) => {
     setIsQuoteInReadingMode(isReading);
   }, []);
 
-  // ✅ AMÉLIORATION: Fonction de tracking de lecture avec temps réel
+  // ✅ BATCH ANALYTICS: Fonction de tracking de lecture
   const handleQuoteView = useCallback((quote: Quote, readingTime?: number) => {
     // Éviter le double tracking de la même citation
     if (lastTrackedQuoteRef.current === quote.id) return;
 
-    trackEvent('quote_read', {
-      quote_id: quote.id,
-      category: quote.category,
-      text_length: quote.text?.length || 0,
-      is_favorite: quote.isFavorite || false,
-      read_duration_seconds: readingTime || 3, // Temps estimé ou réel
-      navigation_method: 'manual', // sera modifié selon le contexte
-      search_result: !!searchTerm,
-      quote_index: currentIndex,
-      total_quotes: quotes.length,
-      timestamp: new Date().toISOString()
-    });
-
+    // ✅ TRACKING BATCH - Une seule ligne !
+    trackQuoteRead(quote.id, readingTime || 3, 'manual');
     lastTrackedQuoteRef.current = quote.id;
-  }, [trackEvent, searchTerm, currentIndex, quotes.length]);
+    
+    console.log(`📖 Citation trackée (batch): ${quote.id} (${readingTime}s)`);
+  }, [trackQuoteRead]);
 
-  // ✅ AMÉLIORATION: Wrapper pour onToggleFavorite avec tracking
-  const handleToggleFavoriteWithTracking = useCallback(async (id: string) => {
+  // ✅ BATCH ANALYTICS: Toggle favori optimisé
+  const handleToggleFavoriteWithTracking = useCallback(async (id: string, noteData?: {
+    content: string;
+    note_category: 'reflexion' | 'action' | 'objectif';
+  }) => {
     const quote = quotes.find(q => q.id === id);
     if (!quote) return;
 
     const newFavoriteStatus = !quote.isFavorite;
     
     try {
-      // ✅ TRACKING AVANT l'action avec plus de détails
-      trackEvent('quote_favorite_toggle', {
-        quote_id: id,
-        category: quote.category,
-        action: newFavoriteStatus ? 'add' : 'remove',
-        quote_text_preview: quote.text?.substring(0, 50) + '...',
-        current_index: currentIndex,
-        selected_category: selectedCategory,
-        navigation_context: searchTerm ? 'search_results' : 'normal_browse',
-        search_term: searchTerm,
-        timestamp: new Date().toISOString()
-      });
-
+      // ✅ TRACKING BATCH avec support des notes
+      trackFavorite(
+        quote.id, 
+        newFavoriteStatus ? 'add' : 'remove', 
+        quote.category,
+        newFavoriteStatus ? noteData : undefined
+      );
+      
       // Appeler la fonction originale
       await onToggleFavorite(id);
       
-      // ✅ TRACKING de succès
-      trackEvent('quote_favorite_success', {
-        quote_id: id,
-        category: quote.category,
-        new_status: newFavoriteStatus ? 'favorited' : 'unfavorited',
-        timestamp: new Date().toISOString()
-      });
-      
-      console.log(`✅ Favori ${newFavoriteStatus ? 'ajouté' : 'retiré'} avec succès`);
+      if (noteData && newFavoriteStatus) {
+        console.log(`✅ Favori ajouté avec note (${noteData.note_category}) - Batch analytics`);
+      } else {
+        console.log(`✅ Favori ${newFavoriteStatus ? 'ajouté' : 'retiré'} - Batch analytics`);
+      }
       
     } catch (error) {
-      // ✅ TRACKING des erreurs
-      trackEvent('quote_favorite_error', {
-        quote_id: id,
-        category: quote.category,
-        intended_action: newFavoriteStatus ? 'add' : 'remove',
-        error_message: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
-      });
-      
       console.error('❌ Erreur lors du toggle favori:', error);
     }
-  }, [quotes, currentIndex, selectedCategory, searchTerm, trackEvent, onToggleFavorite]);
+  }, [quotes, trackFavorite, onToggleFavorite]);
 
-  // ✅ AMÉLIORATION: Wrapper pour les actions d'édition/suppression
+  // ✅ Actions avec tracking batch
   const handleEditWithTracking = useCallback((quote: Quote) => {
-    trackEvent('quote_edit_initiated', {
-      quote_id: quote.id,
-      category: quote.category,
-      current_index: currentIndex,
-      timestamp: new Date().toISOString()
-    });
+    // Optionnel: tracker les éditions
+    console.log(`✏️ Édition initiée: ${quote.id}`);
     onEdit(quote);
-  }, [trackEvent, currentIndex, onEdit]);
+  }, [onEdit]);
 
   const handleDeleteWithTracking = useCallback((id: string) => {
-    const quote = quotes.find(q => q.id === id);
-    trackEvent('quote_delete_initiated', {
-      quote_id: id,
-      category: quote?.category || selectedCategory,
-      current_index: currentIndex,
-      timestamp: new Date().toISOString()
-    });
+    console.log(`🗑️ Suppression initiée: ${id}`);
     onDelete(id);
-  }, [quotes, selectedCategory, currentIndex, trackEvent, onDelete]);
+  }, [onDelete]);
 
-  // ✅ AMÉLIORATION: Gestion du swipe avec tracking de navigation
+  // ✅ BATCH ANALYTICS: Navigation avec tracking
   const handleSwipeLeft = useCallback(() => {
     if (quotes.length === 0 || isTransitioning) return;
     
     setIsTransitioning(true);
     const newIndex = currentIndex < quotes.length - 1 ? currentIndex + 1 : 0;
     
-    // Tracker la navigation
-    trackEvent('quote_navigation', {
-      direction: 'next',
-      method: 'swipe',
-      from_index: currentIndex,
-      to_index: newIndex,
-      category: selectedCategory,
-      is_wraparound: newIndex === 0 && currentIndex === quotes.length - 1,
-      timestamp: new Date().toISOString()
-    });
+    // ✅ TRACKING BATCH
+    trackNavigation(currentIndex, newIndex, 'swipe', 'next');
     
     setTimeout(() => {
       onIndexChange(newIndex);
       setIsTransitioning(false);
     }, 150);
-  }, [quotes.length, currentIndex, onIndexChange, isTransitioning, selectedCategory, trackEvent]);
+  }, [quotes.length, currentIndex, onIndexChange, isTransitioning, trackNavigation]);
 
   const handleSwipeRight = useCallback(() => {
     if (quotes.length === 0 || isTransitioning) return;
@@ -241,87 +209,65 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     setIsTransitioning(true);
     const newIndex = currentIndex > 0 ? currentIndex - 1 : quotes.length - 1;
     
-    // Tracker la navigation
-    trackEvent('quote_navigation', {
-      direction: 'previous',
-      method: 'swipe',
-      from_index: currentIndex,
-      to_index: newIndex,
-      category: selectedCategory,
-      is_wraparound: newIndex === quotes.length - 1 && currentIndex === 0,
-      timestamp: new Date().toISOString()
-    });
+    // ✅ TRACKING BATCH
+    trackNavigation(currentIndex, newIndex, 'swipe', 'previous');
     
     setTimeout(() => {
       onIndexChange(newIndex);
       setIsTransitioning(false);
     }, 150);
-  }, [quotes.length, currentIndex, onIndexChange, isTransitioning, selectedCategory, trackEvent]);
+  }, [quotes.length, currentIndex, onIndexChange, isTransitioning, trackNavigation]);
 
   // Hook pour la détection des swipes - DÉSACTIVÉ en mode lecture
   const swipeContainerRef = useSwipeNavigation(
     handleSwipeLeft,
     handleSwipeRight,
-    quotes.length > 1 && !isTransitioning && !isQuoteInReadingMode // MODIFIÉ
+    quotes.length > 1 && !isTransitioning && !isQuoteInReadingMode
   );
 
-  // ✅ AMÉLIORATION: Navigation avec tracking
+  // ✅ BATCH ANALYTICS: Navigation avec boutons
   const handleNavigateToFirst = useCallback(() => {
     if (quotes.length > 0 && !isTransitioning) {
       setIsTransitioning(true);
       
-      trackEvent('quote_navigation', {
-        direction: 'first',
-        method: 'button',
-        from_index: currentIndex,
-        to_index: 0,
-        category: selectedCategory,
-        timestamp: new Date().toISOString()
-      });
+      trackNavigation(currentIndex, 0, 'button', 'first');
       
       setTimeout(() => {
         onIndexChange(0);
         setIsTransitioning(false);
       }, 150);
     }
-  }, [quotes.length, isTransitioning, currentIndex, selectedCategory, trackEvent, onIndexChange]);
+  }, [quotes.length, isTransitioning, currentIndex, trackNavigation, onIndexChange]);
 
   const handleNavigateToLast = useCallback(() => {
     if (quotes.length > 0 && !isTransitioning) {
       setIsTransitioning(true);
       const last = quotes.length - 1;
       
-      trackEvent('quote_navigation', {
-        direction: 'last',
-        method: 'button',
-        from_index: currentIndex,
-        to_index: last,
-        category: selectedCategory,
-        timestamp: new Date().toISOString()
-      });
+      trackNavigation(currentIndex, last, 'button', 'last');
       
       setTimeout(() => {
         onIndexChange(last);
         setIsTransitioning(false);
       }, 150);
     }
-  }, [quotes.length, isTransitioning, currentIndex, selectedCategory, trackEvent, onIndexChange]);
+  }, [quotes.length, isTransitioning, currentIndex, trackNavigation, onIndexChange]);
 
-  // ✅ AMÉLIORATION: Bookmark avec tracking
+  // ✅ BATCH ANALYTICS: Bookmark avec tracking
   const handleManualBookmark = useCallback(async () => {
     if (quotes.length === 0) return;
     
-    trackEvent('bookmark_created', {
-      quote_id: quotes[currentIndex]?.id,
-      category: selectedCategory,
-      quote_index: currentIndex,
-      bookmark_type: 'manual',
-      timestamp: new Date().toISOString()
-    });
+    const currentQuote = quotes[currentIndex];
+    if (currentQuote) {
+      // ✅ TRACKING BATCH
+      trackBookmark(currentQuote.id, currentIndex);
+    }
     
     await updateBookmark(selectedCategory, currentIndex);
     setBookmarkIndex(currentIndex);
-  }, [quotes, currentIndex, selectedCategory, trackEvent]);
+    
+    console.log(`🔖 Bookmark créé - Batch analytics`);
+  }, [quotes, currentIndex, selectedCategory, trackBookmark]);
 
   const handleSwipe = useCallback((direction: 'left' | 'right') => {
     if (direction === 'left') {
@@ -331,36 +277,21 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     }
   }, [handleSwipeLeft, handleSwipeRight]);
 
-  // ✅ AMÉLIORATION: Tracking session avec plus de détails
+  // ✅ BATCH ANALYTICS: Tracking de recherche
   useEffect(() => {
-    // Tracker le début de session dans cette catégorie
-    trackEvent('quote_session_start', {
-      category: selectedCategory,
-      total_quotes: quotes.length,
-      has_search: !!searchTerm,
-      search_term: searchTerm,
-      timestamp: new Date().toISOString()
-    });
+    if (searchTerm && quotes.length >= 0) {
+      trackSearch(searchTerm, quotes.length);
+      console.log(`🔍 Recherche trackée (batch): "${searchTerm}" (${quotes.length} résultats)`);
+    }
+  }, [searchTerm, quotes.length, trackSearch]);
 
-    return () => {
-      // Tracker la fin de session
-      trackEvent('quote_session_end', {
-        category: selectedCategory,
-        session_duration_seconds: Math.round((Date.now() - quoteStartTimeRef.current) / 1000),
-        quotes_viewed: lastTrackedQuoteRef.current ? 1 : 0
-      });
-    };
-  }, [selectedCategory, quotes.length, searchTerm, trackEvent]);
-
-  // ✅ AMÉLIORATION: Tracking du temps de lecture par citation
+  // ✅ Tracking du temps de lecture par citation (optimisé)
   useEffect(() => {
     const currentQuote = quotes[currentIndex];
     if (!currentQuote) return;
 
-    // Démarrer le timer pour cette citation
     quoteStartTimeRef.current = Date.now();
     
-    // Nettoyer le timer précédent
     if (readingTimerRef.current) {
       clearTimeout(readingTimerRef.current);
     }
@@ -371,12 +302,10 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
       handleQuoteView(currentQuote, readingTime);
     }, 3000);
 
-    // Nettoyage lors du changement de citation
     return () => {
       if (readingTimerRef.current) {
         clearTimeout(readingTimerRef.current);
         
-        // Tracker le temps de lecture si la citation a été vue assez longtemps
         const readingTime = Math.round((Date.now() - quoteStartTimeRef.current) / 1000);
         if (readingTime >= 1) {
           handleQuoteView(currentQuote, readingTime);
@@ -392,8 +321,8 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     }
   }, [quotes, currentIndex, onIndexChange]);
 
+  // Charger bookmark (inchangé)
   useEffect(() => {
-    // Charger l'index du bookmark pour la catégorie sélectionnée
     const fetchBookmark = async () => {
       setIsLoading(true);
       try {
@@ -408,43 +337,32 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     fetchBookmark();
   }, [selectedCategory]);
 
-  // ✅ AMÉLIORATION: Navigation clavier avec tracking - DÉSACTIVÉE en mode lecture
+  // ✅ BATCH ANALYTICS: Navigation clavier
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isTransitioning || isQuoteInReadingMode) return; // MODIFIÉ
-
-      const trackKeyboardNavigation = (direction: string) => {
-        trackEvent('quote_navigation', {
-          direction,
-          method: 'keyboard',
-          key: e.key,
-          from_index: currentIndex,
-          category: selectedCategory,
-          timestamp: new Date().toISOString()
-        });
-      };
+      if (isTransitioning || isQuoteInReadingMode) return;
 
       switch (e.key) {
         case 'ArrowLeft':
         case 'h':
           e.preventDefault();
-          trackKeyboardNavigation('previous');
+          trackNavigation(currentIndex, Math.max(0, currentIndex - 1), 'keyboard', 'previous');
           handleSwipeRight();
           break;
         case 'ArrowRight':
         case 'l':
           e.preventDefault();
-          trackKeyboardNavigation('next');
+          trackNavigation(currentIndex, Math.min(quotes.length - 1, currentIndex + 1), 'keyboard', 'next');
           handleSwipeLeft();
           break;
         case 'Home':
           e.preventDefault();
-          trackKeyboardNavigation('first');
+          trackNavigation(currentIndex, 0, 'keyboard', 'first');
           handleNavigateToFirst();
           break;
         case 'End':
           e.preventDefault();
-          trackKeyboardNavigation('last');
+          trackNavigation(currentIndex, quotes.length - 1, 'keyboard', 'last');
           handleNavigateToLast();
           break;
       }
@@ -452,36 +370,24 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isTransitioning, isQuoteInReadingMode, handleSwipeLeft, handleSwipeRight, handleNavigateToFirst, handleNavigateToLast, currentIndex, selectedCategory, trackEvent]); // MODIFIÉ
+  }, [isTransitioning, isQuoteInReadingMode, handleSwipeLeft, handleSwipeRight, handleNavigateToFirst, handleNavigateToLast, currentIndex, quotes.length, trackNavigation]);
 
-  // ✅ AMÉLIORATION: Tracking des recherches
+  // ✅ BATCH ANALYTICS: Debug et session stats
   useEffect(() => {
-    if (searchTerm) {
-      trackEvent('search_performed', {
-        search_term: searchTerm,
-        category: selectedCategory,
-        results_count: quotes.length,
-        timestamp: new Date().toISOString()
-      });
+    const sessionStats = getSessionStats();
+    const debugInfo = getDebugInfo();
+    
+    if (sessionStats) {
+      console.log('📊 Stats session courante:', sessionStats);
     }
-  }, [searchTerm, selectedCategory, quotes.length, trackEvent]);
-
-  // ✅ CORRECTION CRITIQUE: Tracker l'état vide AVANT les returns conditionnels
-  useEffect(() => {
-    if (quotes.length === 0) {
-      trackEvent('empty_state_viewed', {
-        category: selectedCategory,
-        has_search: !!searchTerm,
-        search_term: searchTerm,
-        timestamp: new Date().toISOString()
-      });
+    
+    if (debugInfo.hasCurrentSession) {
+      console.log('🔍 Debug analytics:', debugInfo);
     }
-  }, [quotes.length, selectedCategory, searchTerm, trackEvent]);
+  }, [getSessionStats, getDebugInfo, currentIndex]);
 
-  // ✅ CORRECTION CRITIQUE: Hooks appelés AVANT tous les returns
-  // Maintenant nous pouvons faire les returns conditionnels en sécurité
-
-  // Si aucune citation n'est disponible
+  // ✅ RETURNS CONDITIONNELS (après tous les hooks)
+  
   if (quotes.length === 0) {
     return (
       <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm mb-6">
@@ -499,7 +405,6 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     );
   }
 
-  // Si chargement en cours, afficher un indicateur
   if (isLoading) {
     return (
       <div className="text-center py-12 px-4 rounded-2xl bg-white/50 backdrop-blur-sm shadow-sm mb-6">
@@ -511,16 +416,17 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
     );
   }
 
-  // Vérifier si l'index actuel est valide
   const isValidIndex = currentIndex >= 0 && currentIndex < quotes.length;
   const currentQuote = isValidIndex ? quotes[currentIndex] : null;
 
   return (
     <div className="pb-6 mb-6">
-      {/* Masquer la barre de navigation si en mode lecture - LOGIQUE PRINCIPALE */}
+      {/* Masquer la barre de navigation si en mode lecture */}
       {!isQuoteInReadingMode && (
         <>
-          {/* Affichage du statut de recherche si applicable */}
+         
+
+          {/* Affichage du statut de recherche */}
           {searchTerm && (
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex items-center gap-2 text-yellow-800">
@@ -534,9 +440,8 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
             </div>
           )}
 
-          {/* Barre de navigation avec menu mukhtarat intégré */}
+          {/* Barre de navigation */}
           <div className="flex items-center justify-between mb-4">
-            {/* Menu mukhtarat à l'extrême gauche */}
             <div className="flex items-center gap-1">
               {renderExtraControls && (
                 <div className="mr-1">
@@ -544,7 +449,6 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
                 </div>
               )}
               
-              {/* Boutons de navigation gauche */}
               <button 
                 onClick={handleNavigateToFirst} 
                 className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -563,7 +467,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
               </button>
             </div>
 
-            {/* Compteur central avec indicateur de progression */}
+            {/* Compteur central */}
             <div className="flex flex-col items-center">
               <span className="text-sm font-medium text-gray-500 bg-white/50 px-3 py-1.5 rounded-full">
                 {currentIndex + 1} / {quotes.length}
@@ -585,7 +489,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
               )}
             </div>
 
-            {/* Boutons de navigation droite */}
+            {/* Boutons droite */}
             <div className="flex items-center gap-1">
               <button 
                 onClick={() => handleSwipe('left')} 
@@ -604,7 +508,6 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
                 <ChevronsRight className="w-5 h-5" />
               </button>
               
-              {/* Bouton bookmark */}
               <button
                 onClick={handleManualBookmark}
                 className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -622,19 +525,18 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
         </>
       )}
 
-      {/* Container avec détection de swipe et animation */}
+      {/* Container avec détection de swipe */}
       <div 
         ref={swipeContainerRef}
         className={`transition-all duration-150 ${
           isTransitioning ? 'opacity-80 transform scale-95' : 'opacity-100 transform scale-100'
         }`}
         style={{ 
-          touchAction: 'pan-y pinch-zoom', // Permet le scroll vertical mais limite les gestes horizontaux
-          userSelect: 'none', // Évite la sélection de texte pendant les swipes
+          touchAction: 'pan-y pinch-zoom',
+          userSelect: 'none',
           WebkitUserSelect: 'none'
         }}
       >
-        {/* Contenu de la citation avec espacement pour Bottom Navigation */}
         {currentQuote ? (
           <QuoteCard
             quote={currentQuote}
@@ -643,7 +545,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
             onDelete={handleDeleteWithTracking}
             onSwipe={handleSwipe}
             searchTerm={searchTerm}
-            onReadingModeChange={handleReadingModeChange} // NOUVEAU PROP
+            onReadingModeChange={handleReadingModeChange}
           />
         ) : (
           <div className="p-6 rounded-xl bg-white shadow">
