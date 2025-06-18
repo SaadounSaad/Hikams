@@ -15,25 +15,41 @@ export interface QuoteNote {
 }
 
 class Storage {
-  private async ensureConnection() {
+  private async ensureConnection(): Promise<boolean> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.warn('Erreur de session:', error);
+        return false; // Mode dégradé au lieu d'exception
+      }
+      
       if (!session) {
-        // Si pas de session, on essaie de rafraîchir
-        const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
-        if (!refreshedSession) {
-          throw new Error('Session expirée');
+        // Tentative de refresh avec gestion d'erreur
+        try {
+          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+          return !!refreshedSession;
+        } catch (refreshError) {
+          console.warn('Impossible de rafraîchir la session:', refreshError);
+          return false; // Continuer en mode non authentifié
         }
       }
+      
+      return true;
     } catch (error) {
-      console.error('Erreur de connexion:', error);
-      throw new Error('Problème de connexion à la base de données');
+      console.error('Erreur critique de connexion:', error);
+      return false; // Fallback gracieux
     }
   }
 
   async getQuotesCount(): Promise<number> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - getQuotesCount');
+        return 0;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return 0;
 
@@ -51,89 +67,131 @@ class Storage {
     }
   }
 
-  async getQuotes(sortOrder: 'newest' | 'oldest' | 'scheduled' | 'random' = 'scheduled'): Promise<Quote[]> {
-    try {
-      await this.ensureConnection();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-  
-      const pageSize = 1000;
-      let page = 0;
-      let allData: any[] = [];
-      let hasMore = true;
-  
-      while (hasMore) {
-        let query = supabase
-          .from('quotes')
-          .select('*')
-          .eq('user_id', user.id)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-  
-        switch (sortOrder) {
-          case 'newest':
-            query = query.order('createdAt', { ascending: false });
-            break;
-          case 'oldest':
-            query = query.order('createdAt', { ascending: true });
-            break;
-          case 'scheduled':
-            query = query
-              .order('scheduled_date', { ascending: true, nullsLast: true } as any)
-              .order('createdAt', { ascending: true });
-            break;
-        }
-  
-        const { data, error } = await query;
-        if (error) throw error;
-  
-        allData = [...allData, ...data];
-        hasMore = data.length === pageSize;
-        page++;
-      }
-  
-      const quotes = allData.map(quote => ({
-        id: quote.id,
-        text: quote.text,
-        category: quote.category,
-        source: quote.source || '',
-        isFavorite: quote.is_favorite,
-        createdAt: quote.createdAt,
-        scheduledDate: quote.scheduled_date,
-      }));
-  
-      return sortOrder === 'random' ? quotes.sort(() => Math.random() - 0.5) : quotes;
-    } catch (error) {
-      console.error('Error fetching quotes:', error);
+  // Dans votre storage.ts actuel, juste optimiser la requête
+// Méthode getQuotes() CORRIGÉE - Version sans erreur TypeScript
+async getQuotes(sortOrder: 'newest' | 'oldest' | 'scheduled' | 'random' = 'scheduled'): Promise<Quote[]> {
+  try {
+    const isConnected = await this.ensureConnection();
+    if (!isConnected) {
+      console.warn('Fonctionnement en mode non authentifié - getQuotes');
       return [];
     }
-  }
-  async updateBookmark(category: string, pageIndex: number): Promise<void> {
+
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-  
-    const { data, error: fetchError } = await supabase
-      .from('user_preferences')
-      .select('bookmarks')
-      .eq('user_id', user.id)
-      .single();
-  
-    const currentBookmarks = data?.bookmarks || {};
-    currentBookmarks[category] = pageIndex;
-  
-    const { error: updateError } = await supabase
-      .from('user_preferences')
-      .update({ bookmarks: currentBookmarks })
+    if (!user) return [];
+
+    console.time('Chargement citations optimisé');
+
+    // 🚀 UNE SEULE REQUÊTE au lieu de la boucle while
+    let query = supabase
+      .from('quotes')
+      .select('*')
       .eq('user_id', user.id);
-  
-    if (updateError) {
-      console.error('Erreur mise à jour bookmarks:', updateError);
+
+    // Application du tri selon l'ordre demandé
+    switch (sortOrder) {
+      case 'newest':
+        query = query.order('createdAt', { ascending: false });
+        break;
+      case 'oldest':
+        query = query.order('createdAt', { ascending: true });
+        break;
+      case 'scheduled':
+        // ✅ CORRIGÉ : nullsFirst au lieu de nullsLast
+        query = query
+          .order('scheduled_date', { ascending: true, nullsFirst: false })
+          .order('createdAt', { ascending: true });
+        break;
+      case 'random':
+        // Pour random, on récupère tout et on mélange côté client
+        query = query.order('createdAt', { ascending: true });
+        break;
+    }
+
+    const { data, error } = await query;
+    
+    console.timeEnd('Chargement citations optimisé');
+
+    if (error) {
+      console.error('Erreur lors du chargement:', error);
+      throw error;
+    }
+
+    // Transformation des données
+    const quotes = (data || []).map(quote => ({
+      id: quote.id,
+      text: quote.text,
+      category: quote.category,
+      source: quote.source || '',
+      isFavorite: quote.is_favorite,
+      createdAt: quote.createdAt,
+      scheduledDate: quote.scheduled_date,
+    }));
+
+    console.log(`📊 ${quotes.length} citations chargées avec succès`);
+
+    // Mélange aléatoire si demandé
+    return sortOrder === 'random' ? 
+      quotes.sort(() => Math.random() - 0.5) : quotes;
+
+  } catch (error) {
+    console.error('Error fetching quotes:', error);
+    return [];
+  }
+}
+
+
+
+private getSortColumn(sortOrder: string): string {
+  switch (sortOrder) {
+    case 'newest': return 'createdAt';
+    case 'oldest': return 'createdAt';
+    case 'scheduled': return 'scheduled_date';
+    default: return 'createdAt';
+  }
+}
+
+  async updateBookmark(category: string, pageIndex: number): Promise<void> {
+    try {
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - updateBookmark');
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+    
+      const { data, error: fetchError } = await supabase
+        .from('user_preferences')
+        .select('bookmarks')
+        .eq('user_id', user.id)
+        .single();
+    
+      const currentBookmarks = data?.bookmarks || {};
+      currentBookmarks[category] = pageIndex;
+    
+      const { error: updateError } = await supabase
+        .from('user_preferences')
+        .update({ bookmarks: currentBookmarks })
+        .eq('user_id', user.id);
+    
+      if (updateError) {
+        console.error('Erreur mise à jour bookmarks:', updateError);
+      }
+    } catch (error) {
+      console.error('Error updating bookmark:', error);
     }
   }
-  
 
   async saveQuote(quote: Quote): Promise<void> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - saveQuote');
+        throw new Error('Authentification requise pour sauvegarder');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -144,7 +202,7 @@ class Storage {
         source: quote.source,
         is_favorite: quote.isFavorite,
         createdAt: quote.createdAt,
-        scheduled_date: quote.scheduled_date,
+        scheduled_date: quote.scheduledDate,
         user_id: user.id,
       });
 
@@ -160,7 +218,12 @@ class Storage {
 
   async updateQuote(quote: Quote): Promise<void> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - updateQuote');
+        throw new Error('Authentification requise pour modifier');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -171,7 +234,7 @@ class Storage {
           category: quote.category,
           source: quote.source,
           is_favorite: quote.isFavorite,
-          scheduled_date: quote.scheduled_date,
+          scheduled_date: quote.scheduledDate,
         })
         .eq('id', quote.id)
         .eq('user_id', user.id);
@@ -185,7 +248,12 @@ class Storage {
 
   async deleteQuote(id: string): Promise<void> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - deleteQuote');
+        throw new Error('Authentification requise pour supprimer');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -204,7 +272,12 @@ class Storage {
 
   async clearAllQuotes(): Promise<void> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - clearAllQuotes');
+        throw new Error('Authentification requise pour supprimer');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -222,7 +295,12 @@ class Storage {
 
   async toggleFavorite(id: string): Promise<void> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - toggleFavorite');
+        throw new Error('Authentification requise pour modifier les favoris');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -250,7 +328,12 @@ class Storage {
 
   async getDailyQuotes(): Promise<Quote[]> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - getDailyQuotes');
+        return [];
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
@@ -276,13 +359,12 @@ class Storage {
 
       if (error) throw error;
 
-      // Dans storage.ts, méthode getDailyQuotes()
       return data.map(quote => ({
         id: quote.id,
         text: quote.text,
         category: quote.category,
         source: quote.source || '',
-        isFavorite: quote.is_favorite, // Vérifiez que cette ligne existe et est correcte
+        isFavorite: quote.is_favorite,
         createdAt: quote.createdAt,
         scheduledDate: quote.scheduled_date,
       }));
@@ -291,9 +373,15 @@ class Storage {
       return [];
     }
   }
+
   async getQuoteNotes(quoteId: string): Promise<QuoteNote[]> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - getQuoteNotes');
+        return [];
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
@@ -318,7 +406,12 @@ class Storage {
   
   async saveQuoteNote(note: Omit<QuoteNote, 'id' | 'createdAt' | 'updated_at' | 'user_id'>): Promise<QuoteNote> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - saveQuoteNote');
+        throw new Error('Authentification requise pour sauvegarder une note');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -349,7 +442,12 @@ class Storage {
   
   async updateQuoteNote(noteId: string, updates: Partial<Omit<QuoteNote, 'id' | 'quote_id' | 'user_id' | 'createdAt'>>): Promise<QuoteNote> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - updateQuoteNote');
+        throw new Error('Authentification requise pour modifier une note');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -378,7 +476,12 @@ class Storage {
   
   async deleteQuoteNote(noteId: string): Promise<void> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - deleteQuoteNote');
+        throw new Error('Authentification requise pour supprimer une note');
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
@@ -400,7 +503,12 @@ class Storage {
   
   async getDueNoteReminders(): Promise<(QuoteNote & { quote?: Quote })[]> {
     try {
-      await this.ensureConnection();
+      const isConnected = await this.ensureConnection();
+      if (!isConnected) {
+        console.warn('Fonctionnement en mode non authentifié - getDueNoteReminders');
+        return [];
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
@@ -447,3 +555,4 @@ class Storage {
 }
 
 export const storage = new Storage();
+

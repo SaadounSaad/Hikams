@@ -1,4 +1,4 @@
-// src/components/QuoteViewer.tsx - VERSION COMPLÈTE AVEC ANALYTICS BATCH
+// src/components/QuoteViewer.tsx - VERSION CORRIGÉE SANS renderExtraControls
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Library, Bookmark } from 'lucide-react';
 import { Quote } from '../types';
@@ -17,7 +17,7 @@ interface QuoteViewerProps {
   onEdit: (quote: Quote) => void;
   onDelete: (id: string) => void;
   searchTerm?: string;
-  renderExtraControls?: () => React.ReactNode;
+  // ✅ SUPPRIMÉ: renderExtraControls?: () => React.ReactNode;
 }
 
 // Hook personnalisé pour la gestion des swipes (inchangé)
@@ -97,7 +97,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
   onEdit,
   onDelete,
   searchTerm,
-  renderExtraControls,
+  // ✅ SUPPRIMÉ: renderExtraControls,
 }) => {
   // ✅ HOOKS - TOUS APPELÉS EN PREMIER
   const { user } = useAuth();
@@ -424,8 +424,6 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
       {/* Masquer la barre de navigation si en mode lecture */}
       {!isQuoteInReadingMode && (
         <>
-         
-
           {/* Affichage du statut de recherche */}
           {searchTerm && (
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -443,11 +441,7 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
           {/* Barre de navigation */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-1">
-              {renderExtraControls && (
-                <div className="mr-1">
-                  {renderExtraControls()}
-                </div>
-              )}
+              {/* ✅ SUPPRIMÉ: renderExtraControls */}
               
               <button 
                 onClick={handleNavigateToFirst} 
@@ -467,34 +461,32 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
               </button>
             </div>
 
-            {/* Compteur central */}
-            <div className="flex flex-col items-center">
-              <span className="text-sm font-medium text-gray-500 bg-white/50 px-3 py-1.5 rounded-full">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600 font-medium">
                 {currentIndex + 1} / {quotes.length}
               </span>
-              {quotes.length > 1 && (
-                <div className="mt-1 flex gap-1">
-                  {Array.from({ length: Math.min(quotes.length, 5) }, (_, i) => (
-                    <div
-                      key={i}
-                      className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                        i === currentIndex ? 'bg-blue-500' : 'bg-gray-300'
-                      }`}
-                    />
-                  ))}
-                  {quotes.length > 5 && (
-                    <span className="text-xs text-gray-400 ml-1">...</span>
-                  )}
+              
+              {bookmarkIndex !== null && bookmarkIndex === currentIndex && (
+                <div className="flex items-center gap-1 text-blue-600">
+                  <Bookmark className="w-4 h-4 fill-current" />
+                  <span className="text-xs font-medium">Signet</span>
                 </div>
               )}
+              
+              <button
+                onClick={handleManualBookmark}
+                className="p-2 rounded-full hover:bg-white/50 transition-colors"
+                title="Créer un signet"
+              >
+                <Bookmark className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Boutons droite */}
             <div className="flex items-center gap-1">
               <button 
                 onClick={() => handleSwipe('left')} 
                 className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={quotes.length === 0 || currentIndex >= quotes.length - 1 || isTransitioning}
+                disabled={quotes.length === 0 || currentIndex === quotes.length - 1 || isTransitioning}
                 title="التالي"
               >
                 <ChevronRight className="w-5 h-5" />
@@ -502,57 +494,33 @@ export const QuoteViewer: React.FC<QuoteViewerProps> = ({
               <button 
                 onClick={handleNavigateToLast} 
                 className="p-2 rounded-full hover:bg-white/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={quotes.length === 0 || currentIndex >= quotes.length - 1 || isTransitioning}
+                disabled={quotes.length === 0 || currentIndex === quotes.length - 1 || isTransitioning}
                 title="الذهاب إلى النهاية"
               >
                 <ChevronsRight className="w-5 h-5" />
-              </button>
-              
-              <button
-                onClick={handleManualBookmark}
-                className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  bookmarkIndex === currentIndex 
-                    ? 'bg-blue-100 text-blue-600' 
-                    : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
-                }`}
-                title="إضافة إشارة مرجعية"
-                disabled={quotes.length === 0 || isTransitioning}
-              >
-                <Bookmark className="w-4 h-4" />
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* Container avec détection de swipe */}
+      {/* Citation actuelle */}
       <div 
         ref={swipeContainerRef}
-        className={`transition-all duration-150 ${
-          isTransitioning ? 'opacity-80 transform scale-95' : 'opacity-100 transform scale-100'
-        }`}
-        style={{ 
-          touchAction: 'pan-y pinch-zoom',
-          userSelect: 'none',
-          WebkitUserSelect: 'none'
-        }}
+        className={`transition-opacity duration-150 ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}
       >
-        {currentQuote ? (
+        {currentQuote && (
           <QuoteCard
             quote={currentQuote}
             onToggleFavorite={handleToggleFavoriteWithTracking}
             onEdit={handleEditWithTracking}
             onDelete={handleDeleteWithTracking}
-            onSwipe={handleSwipe}
             searchTerm={searchTerm}
             onReadingModeChange={handleReadingModeChange}
           />
-        ) : (
-          <div className="p-6 rounded-xl bg-white shadow">
-            <p className="text-center text-gray-500">Citation non disponible ou en cours de chargement</p>
-          </div>
         )}
       </div>
     </div>
   );
 };
+

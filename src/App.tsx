@@ -23,7 +23,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import { getSavedPageIndex, updateBookmark } from './utils/bookmarkService';
 import { arabicTextContains } from './utils/arabic-search-utils';
 import ErrorBoundary from './components/ErrorBoundary';
-
+import { Bookmark } from 'lucide-react';
 // Composant Menu Déroulant Mukhtarat (inchangé)
 const MukhtaratDropdownMenu = ({ 
   onShowAll, 
@@ -118,7 +118,24 @@ function AppContent() {
   const [bookmarkCache, setBookmarkCache] = useState<Map<string, number>>(new Map());
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
-
+const goToBookmark = useCallback(async () => {
+  try {
+    const savedIndex = await getSavedPageIndex(selectedCategory);
+    if (savedIndex !== null && savedIndex < filteredQuotes.length) {
+      setCurrentQuoteIndex(savedIndex);
+      console.log(`🔖 Aller au signet: page ${savedIndex + 1}`);
+      
+      // Optionnel : Afficher une notification
+      // toast.success(`Signet chargé: page ${savedIndex + 1}`);
+    } else {
+      console.log('❌ Aucun signet trouvé');
+      // Optionnel : Afficher un message
+      // toast.info('Aucun signet sauvegardé');
+    }
+  } catch (error) {
+    console.error('❌ Erreur chargement signet:', error);
+  }
+}, [selectedCategory, filteredQuotes.length]);
   const isSearchContext: boolean = selectedCategory === 'mukhtarat' || 
     (!!selectedCategory && mukhtaratBookNames.includes(selectedCategory));
 
@@ -331,24 +348,72 @@ function AppContent() {
   }, [quotes, mukhtaratBookNames, selectedBookTitle]);
 
   const renderHeader = useCallback(() => (
-    <div className={`${isSepiaMode ? 'bg-amber-50/80' : 'bg-white/80'} backdrop-blur-sm shadow-sm h-16 z-30`}>
-      <div className="h-full flex items-center gap-4 px-4">
-        <div className="flex-1 flex items-center gap-4 overflow-hidden">
-          <h1 className="text-xl md:text-2xl font-bold font-arabic text-sky-600 whitespace-nowrap">
-            {isSearchActive && searchTerm ? `نتيجة البحث: "${searchTerm}"` : getCategoryTitle(selectedCategory)}
-          </h1>
-          
-          {categoryManager.isMukhtaratSubCategory && categoryManager.isMukhtaratSubCategory(selectedCategory) && (
-            <div className="flex items-center">
-              <span className="text-xs font-medium px-2 py-1 rounded-md bg-sky-100 text-sky-600">
-                {filteredQuotes.length}
-              </span>
-            </div>
-          )}
-        </div>
+  <div className={`${isSepiaMode ? 'bg-amber-50/80' : 'bg-white/80'} backdrop-blur-sm shadow-sm h-16 z-30`}>
+    <div className="h-full flex items-center gap-4 px-4">
+      <div className="flex-1 flex items-center gap-4 overflow-hidden">
+        <h1 className="text-xl md:text-2xl font-bold font-arabic text-blue-600 whitespace-nowrap">
+          {isSearchActive && searchTerm ? `نتيجة البحث: "${searchTerm}"` : getCategoryTitle(selectedCategory)}
+        </h1>
+        
+        {/* Compteur existant */}
+        {categoryManager.isMukhtaratSubCategory && categoryManager.isMukhtaratSubCategory(selectedCategory) && (
+          <div className="flex items-center">
+            <span className="text-xs font-medium px-2 py-1 rounded-md bg-green-100 text-green-600">
+              {filteredQuotes.length}
+            </span>
+          </div>
+        )}
       </div>
+      
+      {/* 🔖 NOUVEAU : Bouton Aller au Signet */}
+      {(selectedCategory === 'daily' || isMukhtaratContext()) && (
+        <button
+          onClick={goToBookmark}
+          className="flex items-center gap-1 px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-md transition-colors text-sm"
+          title="aller au signet"
+        >
+          <Bookmark className="w-3 h-3" />
+          <span className="font-arabic hidden sm:inline">سِجِل</span>
+        </button>
+      )}
+      
+      {/* Menu Mukhtarat existant */}
+      {isMukhtaratContext() && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openMukhtaratPage}
+            className="flex items-center gap-1 px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded-md transition-colors text-sm"
+            title="اختر كتابا"
+          >
+            <Search className="w-3 h-3" />
+            <span className="font-arabic">اختر كتابا</span>
+          </button>
+          
+          <button
+            onClick={showAllMukhtarat}
+            className="flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors text-sm"
+            title="الكل"
+          >
+            <Home className="w-3 h-3" />
+            <span className="font-arabic">الكل</span>
+          </button>
+        </div>
+      )}
     </div>
-  ), [isSepiaMode, isSearchActive, searchTerm, getCategoryTitle, selectedCategory, filteredQuotes.length]);
+  </div>
+), [
+  isSepiaMode, 
+  isSearchActive, 
+  searchTerm, 
+  getCategoryTitle, 
+  selectedCategory, 
+  filteredQuotes.length,
+  isMukhtaratContext,
+  goToBookmark,        // ✅ AJOUT
+  openMukhtaratPage,
+  showAllMukhtarat
+]);
+
 
   // ✅ UseEffects SIMPLIFIÉS
 
@@ -490,24 +555,27 @@ function AppContent() {
     return () => clearTimeout(timeoutId);
   }, [saveMukhtaratState]);
 
-  // Charger bookmark (inchangé)
-  useEffect(() => {
-    async function loadBookmarkIndex() {
-      if (bookmarkCache.has(selectedCategory)) {
-        const cachedIndex = bookmarkCache.get(selectedCategory)!;
-        setCurrentQuoteIndex(cachedIndex);
-        return;
+  // ✅ Version simplifiée
+useEffect(() => {
+  async function loadBookmarkIndex() {
+    if (selectedCategory && selectedCategory !== 'analytics') {  // ✅ Supprimé !== 'daily'
+      try {
+        const index = await getSavedPageIndex(selectedCategory);
+        const validIndex = index ?? 0;
+        
+        console.log(`🔖 Bookmark chargé pour ${selectedCategory}:`, validIndex);
+        setCurrentQuoteIndex(validIndex);
+      } catch (error) {
+        console.error('❌ Erreur chargement bookmark:', error);
+        setCurrentQuoteIndex(0);
       }
-      
-      const index = await getSavedPageIndex(selectedCategory);
-      const validIndex = index ?? 0;
-      
-      setBookmarkCache(prev => new Map(prev.set(selectedCategory, validIndex)));
-      setCurrentQuoteIndex(validIndex);
     }
+  }
 
+  if (filteredQuotes.length > 0) {
     loadBookmarkIndex();
-  }, [selectedCategory, bookmarkCache]);
+  }
+}, [selectedCategory, filteredQuotes.length]);
 
   // ✅ LOADING/AUTH (inchangé)
   if (isLoading) {
@@ -606,13 +674,6 @@ function AppContent() {
                   setDeleteConfirmation(id);
                 }}
                 searchTerm={isSearchActive ? searchTerm : undefined}
-                renderExtraControls={isMukhtaratContext() ? () => (
-                  <MukhtaratDropdownMenu
-                    onShowAll={showAllMukhtarat}
-                    onShowMukhtaratPage={openMukhtaratPage}
-                    onGoToLastPage={goToLastVisitedPage}
-                  />
-                ) : undefined}
               />
             )}
           </div>
