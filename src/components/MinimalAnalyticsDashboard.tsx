@@ -577,7 +577,7 @@ const MinimalAnalyticsDashboard: React.FC<MinimalAnalyticsDashboardProps> = ({
       }
       
       // 2. Attendre un peu pour que Supabase traite les données
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
       
       // 3. Recharger les KPIs depuis la base
       if (supabaseClient) {

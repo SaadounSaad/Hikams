@@ -576,7 +576,18 @@ useEffect(() => {
     loadBookmarkIndex();
   }
 }, [selectedCategory, filteredQuotes.length]);
-
+// Dans le useEffect qui charge les citations
+useEffect(() => {
+  console.log('📊 baarbiTotal citations chargées:', quotes.length);
+  console.log('📚 Catégories uniques:', [...new Set(quotes.map(q => q.category))]);
+  console.log('🔍 Citations par catégorie:', 
+    Object.fromEntries(
+      [...new Set(quotes.map(q => q.category))].map(cat => 
+        [cat, quotes.filter(q => q.category === cat).length]
+      )
+    )
+  );
+}, [quotes]);
   // ✅ LOADING/AUTH (inchangé)
   if (isLoading) {
     return (
